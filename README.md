@@ -5,7 +5,7 @@ To compile and run:
 ```console
 foo@bar:~/openg-lintut$ mkdir build
 foo@bar:~/openg-lintut$ cd build
-foo@bar:~/openg-lintut$ cmake ..
-foo@bar:~/openg-lintut$ make
-foo@bar:~/openg-lintut$ ./gltut
+foo@bar:~/openg-lintut/build$ cmake ..
+foo@bar:~/openg-lintut/build$ make
+foo@bar:~/openg-lintut/build$ ./gltut
 ```

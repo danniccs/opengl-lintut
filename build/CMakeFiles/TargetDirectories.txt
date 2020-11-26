@@ -1,8 +1,0 @@
-/home/danniccs/opengl-lintut/build/CMakeFiles/rebuild_cache.dir
-/home/danniccs/opengl-lintut/build/CMakeFiles/edit_cache.dir
-/home/danniccs/opengl-lintut/build/CMakeFiles/gltut.dir
-/home/danniccs/opengl-lintut/build/CMakeFiles/srclib.dir
-/home/danniccs/opengl-lintut/build/src/CMakeFiles/rebuild_cache.dir
-/home/danniccs/opengl-lintut/build/src/CMakeFiles/edit_cache.dir
-/home/danniccs/opengl-lintut/build/renders/CMakeFiles/rebuild_cache.dir
-/home/danniccs/opengl-lintut/build/renders/CMakeFiles/edit_cache.dir
