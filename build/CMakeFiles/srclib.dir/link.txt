@@ -1,0 +1,2 @@
+/usr/bin/ar qc libsrclib.a  CMakeFiles/srclib.dir/src/glad.c.o CMakeFiles/srclib.dir/src/Light.cpp.o CMakeFiles/srclib.dir/src/Mesh.cpp.o CMakeFiles/srclib.dir/src/misc_sources.cpp.o CMakeFiles/srclib.dir/src/Model.cpp.o CMakeFiles/srclib.dir/src/Shader.cpp.o CMakeFiles/srclib.dir/src/SimpleMesh.cpp.o CMakeFiles/srclib.dir/src/stb_img_implementation.cpp.o CMakeFiles/srclib.dir/src/texture_loader.cpp.o
+/usr/bin/ranlib libsrclib.a
