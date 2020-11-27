@@ -1,7 +1,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
 #include <iostream>
+#include <string>
 #include "Camera.h" // Camera class
 #include "Shader.h" // Shader class
 #include "misc_sources.h"
@@ -40,12 +40,13 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-#ifdef __APPLE__
+    #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
+    #endif
 
     // glfw window creation
     // --------------------
+    //glfwWindowHint(GLFW_SAMPLES, 4);
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
     {
@@ -61,6 +62,14 @@ int main()
         return -1;
     }
 
+    // Turn on vsync
+    bool supported = glfwExtensionSupported("GLX_EXT_swap_control_tear") ||
+                     glfwExtensionSupported("WGL_EXT_swap_control_tear");
+    if (supported)
+        glfwSwapInterval(-1);
+    else
+        glfwSwapInterval(1);
+
     // Set the callback functions
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -72,13 +81,29 @@ int main()
     glfwSetKeyCallback(window, key_callback);
 
     glEnable(GL_DEPTH_TEST);
+    //glEnable(GL_MULTISAMPLE);
+    glEnable(GL_BLEND);
+    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    glBlendFuncSeparate(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
 
-    // build and compile our shader program
+    // build and compile our shader programs
     // ------------------------------------
     Shader normProg("../shaders/quick_normals_vert.glsl", "../shaders/quick_normals_frag.glsl");
+    Shader quadProg("../shaders/quad_vert.glsl", "../shaders/quad_frag.glsl");
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
+    float quadVertices[] = {
+        // positions   // texCoords
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+
+        -1.0f,  1.0f,  0.0f, 1.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f
+    };
+
     float norm_vertices[] = {
         -0.5f, -0.5f, -0.5f, // bottom left front
          0.5f, -0.5f, -0.5f, // bottom right front
@@ -105,50 +130,49 @@ int main()
         4, 0, 2,
     };
 
-    /*float vertices2[] = {
-     *    -0.5f, -0.5f, -0.5f,
-     *     0.5f, -0.5f, -0.5f,
-     *     0.5f,  0.5f, -0.5f,
-     *     0.5f,  0.5f, -0.5f,
-     *    -0.5f,  0.5f, -0.5f,
-     *    -0.5f, -0.5f, -0.5f,
+    float vertices2[] = {
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
 
-     *    -0.5f, -0.5f,  0.5f,
-     *     0.5f, -0.5f,  0.5f,
-     *     0.5f,  0.5f,  0.5f,
-     *     0.5f,  0.5f,  0.5f,
-     *    -0.5f,  0.5f,  0.5f,
-     *    -0.5f, -0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
 
-     *    -0.5f,  0.5f,  0.5f,
-     *    -0.5f,  0.5f, -0.5f,
-     *    -0.5f, -0.5f, -0.5f,
-     *    -0.5f, -0.5f, -0.5f,
-     *    -0.5f, -0.5f,  0.5f,
-     *    -0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
 
-     *     0.5f,  0.5f,  0.5f,
-     *     0.5f,  0.5f, -0.5f,
-     *     0.5f, -0.5f, -0.5f,
-     *     0.5f, -0.5f, -0.5f,
-     *     0.5f, -0.5f,  0.5f,
-     *     0.5f,  0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+         0.5f,  0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
 
-     *    -0.5f, -0.5f, -0.5f,
-     *     0.5f, -0.5f, -0.5f,
-     *     0.5f, -0.5f,  0.5f,
-     *     0.5f, -0.5f,  0.5f,
-     *    -0.5f, -0.5f,  0.5f,
-     *    -0.5f, -0.5f, -0.5f,
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+        -0.5f, -0.5f,  0.5f,
+        -0.5f, -0.5f, -0.5f,
 
-     *    -0.5f,  0.5f, -0.5f,
-     *     0.5f,  0.5f, -0.5f,
-     *     0.5f,  0.5f,  0.5f,
-     *     0.5f,  0.5f,  0.5f,
-     *    -0.5f,  0.5f,  0.5f,
-     *    -0.5f,  0.5f, -0.5f,
-     *};
-     */
+        -0.5f,  0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+         0.5f,  0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f, -0.5f,
+    };
 
     float colors[] = {
         42.0f,  42.0f,  170.0f,
@@ -163,6 +187,30 @@ int main()
 
     for (unsigned int i = 0; i < 24; i++)
         colors[i] = colors[i] / 255;
+
+    unsigned int FBO;
+    unsigned int ZBUFFERS[2];
+    unsigned int CBUFFER;
+    glGenFramebuffers(1, &FBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+
+    glGenTextures(2, ZBUFFERS);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[0]);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[1]);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+
+    glGenTextures(1, &CBUFFER);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, CBUFFER);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+    glTexParameteri(GL_TEXTURE_2D_MULTISAMPLE, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_MULTISAMPLE, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, CBUFFER, 0);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        throw(std::string("FB Error"));
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     unsigned int VBO, VBO2, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -194,12 +242,13 @@ int main()
 
     // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but this rarely happens. Modifying other
     // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
-    glBindVertexArray(0);
+    //glBindVertexArray(0);
 
 
     // uncomment this call to draw in wireframe polygons.
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    glDepthFunc(GL_LESS);
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -216,7 +265,9 @@ int main()
 
         // render
         // ------
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        // first pass
+        glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+        glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // draw our first triangle
@@ -230,14 +281,42 @@ int main()
         glm::mat4 view = cam.GetViewMatrix();
         normProg.setUnifS("view", view);
 
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -5.0f));
-        normProg.setUnifS("model", model);
-
         glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
         //glDrawArrays(GL_POINTS, 0, 4);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0); // no need to unbind it every time 
+        for (unsigned int i = 0; i < 5; i++) {
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (i == 0)
+                normProg.setUnifS("first", 1.0f);
+            else if (i == 1)
+                normProg.setUnifS("first", 0.0f);
+
+            if (i % 2) {
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[0], 0);
+                glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[1]);
+            }
+            else {
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[1], 0);
+                glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, ZBUFFERS[0]);
+            }
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -5.0f));
+            normProg.setUnifS("model", model);
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -10.0f));
+            normProg.setUnifS("model", model);
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        }
+        //glBindVertexArray(0); // no need to unbind it every time 
+
+        // second pass
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, FBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+        glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT,
+                          GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glDisable(GL_DEPTH_TEST);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
