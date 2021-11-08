@@ -2,14 +2,14 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <vector>
-#include "stb_image.h"
+#include <stb-master/stb_image.h>
 #include "texture_loader.h"
 
 using namespace std;
 
 // utility function for loading a 2D texture from file (generates the texture)
-unsigned int loadTexture(string path, bool flip, GLenum sWrap, GLenum tWrap,
-    GLenum minFilter, GLenum magFilter)
+unsigned int loadTexture(string path, bool srgb, bool flip, GLenum sWrap,
+    GLenum tWrap, GLenum minFilter, GLenum magFilter)
 {
     // tell stb_image to flip images on load (the image y axis tends to start from the top)
     stbi_set_flip_vertically_on_load(flip);
@@ -20,16 +20,31 @@ unsigned int loadTexture(string path, bool flip, GLenum sWrap, GLenum tWrap,
     int width, height, nrComponents;
     unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrComponents, 0);
     if (data) {
-        GLenum format = GL_RGB;
+        GLenum iformat = GL_RGB;
+        GLenum eformat = GL_RGB;
         if (nrComponents == 1)
-            format = GL_RED;
-        if (nrComponents == 3)
-            format = GL_RGB;
+            eformat = GL_RED;
+        else if (nrComponents == 3)
+            eformat = GL_RGB;
         else if (nrComponents == 4)
-            format = GL_RGBA;
+            eformat = GL_RGBA;
+
+        // override the format with a user-defined format
+        if (srgb) {
+            if (nrComponents == 3)
+                iformat = GL_SRGB;
+            else if (nrComponents == 4)
+                iformat = GL_SRGB_ALPHA;
+        }
+        else {
+            if (nrComponents == 3)
+                iformat = GL_RGB;
+            else if (nrComponents == 4)
+                iformat = GL_RGBA;
+        }
 
         glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glTexImage2D(GL_TEXTURE_2D, 0, iformat, width, height, 0, eformat, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sWrap);
