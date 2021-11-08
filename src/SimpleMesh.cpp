@@ -6,11 +6,12 @@
 
 using namespace std;
 
-SimpleMesh::SimpleMesh(float* vertices, unsigned int numVertices,
-    vector<string> texturePaths, bool hasNormals, vector<GLenum> texParams,
-    vector<string> cubeTexturePaths)
+SimpleMesh::SimpleMesh(const float* vertices, unsigned int numVertices,
+    vector<string> texturePaths, bool bSRGB, bool hasNormals,
+    vector<GLenum> texParams, vector<string> cubeTexturePaths)
 {
     this->numVertices = numVertices;
+    this->bSRGB= bSRGB;
 
     // Create vertex array object
     glGenVertexArrays(1, &VAO);
@@ -141,10 +142,6 @@ void SimpleMesh::getTextureLocations(Shader shader) {
                 number = to_string(diffuseNr);
                 diffuseNr++;
             }
-            else if (name == "specular") {
-                number = to_string(specularNr);
-                specularNr++;
-            }
             else if (name == "cubeMap") {
                 number = to_string(cubeNr);
                 cubeNr++;
@@ -160,20 +157,20 @@ vector<Texture> SimpleMesh::loadTextures(vector<string> texturePaths,
     vector<Texture> textures;
     for (unsigned int i = 0; i < texturePaths.size(); i++) {
         string path;
-        path = texturePaths[i].substr(0, texturePaths[i].find_last_of(':'));
+        path = texturePaths[i];
         Texture texture;
         if (texParams.empty())
-            texture.id = loadTexture(path);
+            texture.id = loadTexture(path, bSRGB);
         else {
             GLenum sWrap = texParams[1];
             GLenum tWrap = texParams[2];
             GLenum minFilter = texParams[3];
             GLenum magFilter = texParams[4];
-            texture.id = loadTexture(path, true, sWrap, tWrap, minFilter, magFilter);
+            texture.id = loadTexture(path, bSRGB, true, sWrap, tWrap, minFilter, magFilter);
         }
         texture.location = 0;
         texture.path = path;
-        texture.type = texturePaths[i].substr(texturePaths[i].find_last_of(':') + 1);
+        texture.type = "diffuse";
         textures.push_back(texture);
     }
     return textures;
