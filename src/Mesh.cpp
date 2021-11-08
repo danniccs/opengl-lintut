@@ -24,7 +24,7 @@ void Mesh::freeMesh() {
 }
 
 void Mesh::Draw(Shader shader, unsigned int numInstances, glm::mat4* models,
-    glm::mat3* normMats)
+                glm::mat3* normMats) const
 {
     // Populate model matrices
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[MOD_VB]);
@@ -105,6 +105,7 @@ void Mesh::getTextureLocations(Shader shader) {
 }
 
 void Mesh::setupMesh() {
+    unsigned int err;
     // Create vertex array object
     glGenVertexArrays(1, &VAO);
     // Create element buffer object
@@ -117,6 +118,9 @@ void Mesh::setupMesh() {
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        cout << "Mesh EBO error: " << hex << err << '\n';
+    }
 
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[POS_NORM_TEX_VB]);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
@@ -130,6 +134,10 @@ void Mesh::setupMesh() {
     // Texture coordinate attribute
     glEnableVertexAttribArray(TEX_LOC);
     glVertexAttribPointer(TEX_LOC, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        cout << "Mesh VBO error: " << hex << err << '\n';
+    }
+
     // Model matrices
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[MOD_VB]);
     for (unsigned int i = 0; i < 4; i++) {
@@ -137,6 +145,10 @@ void Mesh::setupMesh() {
         glVertexAttribPointer(MOD_LOC + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4) * i));
         glVertexAttribDivisor(MOD_LOC + i, 1);
     }
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        cout << "Mesh model matrix error: " << hex << err << '\n';
+    }
+
     // Normal matrices
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[NORM_M_VB]);
     for (unsigned int i = 0; i < 3; i++) {
@@ -144,15 +156,17 @@ void Mesh::setupMesh() {
         glVertexAttribPointer(NORM_M_LOC + i, 3, GL_FLOAT, GL_FALSE, sizeof(glm::mat3), (void*)(sizeof(glm::vec3) * i));
         glVertexAttribDivisor(NORM_M_LOC + i, 1);
     }
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        cout << "Mesh normal matrix error: " << hex << err << '\n';
+    }
+
     // Colors
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[COL_VB]);
     glEnableVertexAttribArray(COL_LOC);
     glVertexAttribPointer(COL_LOC, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
     glVertexAttribDivisor(COL_LOC, 1);
-
-    unsigned int err;
     while ((err = glGetError()) != GL_NO_ERROR) {
-        cout << hex << err << '\n';
+        cout << "Mesh color buffer error: " << hex << err << '\n';
     }
 
     glBindVertexArray(0);
