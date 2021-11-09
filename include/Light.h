@@ -23,7 +23,7 @@ public:
 		float quadratic = 1.0f, float cutOff = -1.0f, float outerCutOff = -1.0f);
 
 	// Functions for setting parameters
-	void setPos(glm::vec3 position, glm::mat4 view);
+	void setPos(glm::vec3 position, glm::mat4 transform);
 	void setDir(glm::vec3 direction, glm::mat3 dirNormMatrix);
 	void setColors(glm::vec3 color, float ambientMult, float diffuseMult, float specularMult);
 

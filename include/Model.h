@@ -13,13 +13,14 @@ class Model {
 public:
     std::string directory;
     /*  Functions   */
-    Model(std::string path, std::vector<std::string> cubeMapPaths = {});
+    Model(std::string path, bool bSRGB = false, std::vector<std::string> cubeMapPaths = {});
     ~Model();
-    void Draw(Shader shader, unsigned int numInstances, glm::mat4* models,
-        glm::mat3* normMats);
+    void Draw(const Shader& shader, unsigned int numInstances, glm::mat4* models,
+        glm::mat3* normMats) const;
     void getTextureLocations(Shader shader);
 private:
     /*  Model Data  */
+    bool bSRGB;
     std::vector<Mesh> meshes;
     std::unordered_map<std::string, Texture> loadedTextures;
     Texture cubeTex;
@@ -30,7 +31,7 @@ private:
     void processNode(aiNode* node, const aiScene* scene);
     Mesh processMesh(aiMesh* mesh, const aiScene* scene);
     std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type,
-        std::string typeName);
+        std::string typeName, bool srgb = false);
     Material loadMaterial(aiMaterial* mat);
 };
 
