@@ -10,7 +10,7 @@ float getSubdet(glm::mat4 matrix, unsigned int col, unsigned int row) {
     for (unsigned int k = 0; k < 3; k++) {
         for (unsigned int l = 0; l < 3; l++) {
             if (k != col && l != row)
-                auxMat[k][l] = matrix[k+skipc][l+skipr];
+                auxMat[k][l] = matrix[k + skipc][l + skipr];
             else {
                 if (k == col)
                     skipc = 1;
@@ -20,7 +20,7 @@ float getSubdet(glm::mat4 matrix, unsigned int col, unsigned int row) {
         }
     }
     result = glm::determinant(auxMat);
-	return result;
+    return result;
 }
 
 float getSubdet(glm::mat3 matrix, unsigned int col, unsigned int row) {
@@ -45,18 +45,18 @@ float getSubdet(glm::mat3 matrix, unsigned int col, unsigned int row) {
     return result;
 }
 
-glm::mat4 getAdjoint(glm::mat4 matrix) {
-	glm::mat4 result;
-	for (unsigned int i = 0; i < 4; i++) {
-		for (unsigned int j = 0; j < 4; j++) {
-			result[j][i] = getSubdet(matrix, i, j);
-            result = (i + j) & 1 ? -result:result;
-		}
-	}
-	return result;
+glm::mat4 sources::getAdjoint(glm::mat4 matrix) {
+    glm::mat4 result;
+    for (unsigned int i = 0; i < 4; i++) {
+        for (unsigned int j = 0; j < 4; j++) {
+            result[j][i] = getSubdet(matrix, i, j);
+            result = (i + j) & 1 ? -result : result;
+        }
+    }
+    return result;
 }
 
-glm::mat3 getAdjoint(glm::mat3 matrix) {
+glm::mat3 sources::getAdjoint(glm::mat3 matrix) {
     glm::mat3 result;
     for (unsigned int i = 0; i < 3; i++) {
         for (unsigned int j = 0; j < 3; j++) {
@@ -68,7 +68,7 @@ glm::mat3 getAdjoint(glm::mat3 matrix) {
     return result;
 }
 
-void printMatrix(glm::mat4 matrix) {
+void sources::printMatrix(glm::mat4 matrix) {
     for (unsigned int i = 0; i < 4; i++) {
         for (unsigned int j = 0; j < 4; j++) {
             std::cout << matrix[j][i] << '\t';
@@ -77,7 +77,7 @@ void printMatrix(glm::mat4 matrix) {
     }
 }
 
-void printMatrix(glm::mat3 matrix) {
+void sources::printMatrix(glm::mat3 matrix) {
     for (unsigned int i = 0; i < 3; i++) {
         for (unsigned int j = 0; j < 3; j++) {
             std::cout << matrix[j][i] << '\t';
@@ -86,18 +86,33 @@ void printMatrix(glm::mat3 matrix) {
     }
 }
 
-float planeVertices[] = {
-	// positions         // texture Coords
-	 5.0f, -0.5f, 5.0f,  2.0f, 0.0f,
-	-5.0f, -0.5f, 5.0f,  0.0f, 0.0f,
-	-5.0f, -0.5f, -5.0f, 0.0f, 2.0f,
-
-	 5.0f, -0.5f, 5.0f,  2.0f, 0.0f,
-	-5.0f, -0.5f, -5.0f, 0.0f, 2.0f,
-	 5.0f, -0.5f, -5.0f, 2.0f, 2.0f
+const glm::vec3 sources::pointLightPositions[4] {
+    glm::vec3(0.7f,  0.2f,  2.0f),
+    glm::vec3(2.3f, -3.3f, -4.0f),
+    glm::vec3(-4.0f,  2.0f, -12.0f),
+    glm::vec3(0.0f,  0.0f, -3.0f)
 };
 
-float cubeVertices[] = {
+const float sources::pointLightAttenuationValues[4][3] {
+    // constant    linear    quadratic
+    {1.0f,       0.14f,    0.07f,},
+    {1.0f,       0.14f,    0.07f,},
+    {1.0f,       0.14f,    0.07f,},
+    {1.0f,       0.14f,    0.07f,},
+};
+
+const float sources::planeVertices[30] {
+    // positions         // texture Coords
+     5.0f, -0.5f, 5.0f,  2.0f, 0.0f,
+    -5.0f, -0.5f, 5.0f,  0.0f, 0.0f,
+    -5.0f, -0.5f, -5.0f, 0.0f, 2.0f,
+
+     5.0f, -0.5f, 5.0f,  2.0f, 0.0f,
+    -5.0f, -0.5f, -5.0f, 0.0f, 2.0f,
+     5.0f, -0.5f, -5.0f, 2.0f, 2.0f
+};
+
+const float sources::cubeVertices[288] {
     // Back face                         Orientation when looking straight at the face
     -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f, // Bottom-right
     -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f, // top-right
@@ -142,7 +157,7 @@ float cubeVertices[] = {
     -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f  // bottom-left        
 };
 
-float skyboxVertices[] = {
+const float sources::skyboxVertices[108] {
     // positions          
     -1.0f,  1.0f, -1.0f,
     -1.0f, -1.0f, -1.0f,
@@ -187,17 +202,17 @@ float skyboxVertices[] = {
      1.0f, -1.0f,  1.0f
 };
 
-float quadVertices[] = {
-    // positions          // texture Coords
-    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
-    -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
-     0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
-     0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
-     0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
-    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
+const float sources::quadVertices[48] {
+    // positions         // normals         // texture Coords
+    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,
+    -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 10.0f,
+     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,
+    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+     0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 0.0f,
 };
 
-float screenQuadVertices[] = {
+const float sources::screenQuadVertices[24] {
     // positions   // texCoords
     -1.0f,  1.0f,  0.0f, 1.0f,
     -1.0f, -1.0f,  0.0f, 0.0f,
@@ -208,30 +223,15 @@ float screenQuadVertices[] = {
      1.0f,  1.0f,  1.0f, 1.0f
 };
 
-glm::vec3 cubePositions[] = {
+const glm::vec3 sources::cubePositions[2] {
     glm::vec3(-1.0f, 0.0001f, -1.0f),
     glm::vec3(2.0f, 0.0001f, 0.0f),
 };
 
-float pointLightAttenuationValues[4][3] = {
-	// constant    linear    quadratic
-	  {1.0f,       0.14f,    0.07f,},
-	  {1.0f,       0.14f,    0.07f,},
-	  {1.0f,       0.14f,    0.07f,},
-	  {1.0f,       0.14f,    0.07f,},
-};
-
-glm::vec3 pointLightPositions[] = {
-	glm::vec3(0.7f,  0.2f,  2.0f),
-	glm::vec3(2.3f, -3.3f, -4.0f),
-	glm::vec3(-4.0f,  2.0f, -12.0f),
-	glm::vec3(0.0f,  0.0f, -3.0f)
-};
-
-glm::vec3 grassCoordinates[] = {
-	glm::vec3(-1.0f, 0.0f, -0.48f),
-	glm::vec3(2.0f, 0.0f, 0.51f),
-	glm::vec3(0.5f, 0.0f, 0.7f),
-	glm::vec3(0.2f, 0.0f, -2.3f),
-	glm::vec3(1.0f, 0.0f, -0.6f),
+const glm::vec3 sources::grassCoordinates[5] {
+    glm::vec3(-1.0f, 0.0f, -0.48f),
+    glm::vec3(2.0f, 0.0f, 0.51f),
+    glm::vec3(0.5f, 0.0f, 0.7f),
+    glm::vec3(0.2f, 0.0f, -2.3f),
+    glm::vec3(1.0f, 0.0f, -0.6f),
 };
