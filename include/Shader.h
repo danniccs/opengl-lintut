@@ -12,14 +12,14 @@ public:
 	unsigned int ID;
 
 	// constructor functions
-	Shader(const char* vertexPath, const char* fragmentPath);
+	Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
 	Shader();
 
 	// initialization function (in case of default constructor)
-	void initVals(const char* vertexPath, const char* fragmentPath);
+	void initVals(const char* vertexPath, const char* fragmentPath, const char* geometryPath = nullptr);
 
 	// function that sets the shader program as the one to use
-	void use();
+	void use() const;
 
 	// utility functions to set the values of uniforms
 	/*
