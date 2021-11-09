@@ -9,7 +9,7 @@ using namespace std;
 unsigned int aiProcessSteps = aiProcess_Triangulate | aiProcess_FlipUVs |
     aiProcess_GenNormals | aiProcess_OptimizeMeshes;
 
-Model::Model(string path, vector<string> cubeMapPaths) {
+Model::Model(string path, bool bSRGB, vector<string> cubeMapPaths) {
     if (!cubeMapPaths.empty()) {
         cubeTex.id = loadCubeMap(cubeMapPaths, false);
         cubeTex.location = 0;
@@ -19,7 +19,7 @@ Model::Model(string path, vector<string> cubeMapPaths) {
     else {
         cubeTex.id = 0;
     }
-
+    this->bSRGB = bSRGB;
     loadModel(path);
 }
 
@@ -28,8 +28,8 @@ Model::~Model() {
         meshes[i].freeMesh();
 }
 
-void Model::Draw(Shader shader, unsigned int numInstances, glm::mat4* models,
-    glm::mat3* normMats)
+void Model::Draw(const Shader& shader, unsigned int numInstances,
+                 glm::mat4* models, glm::mat3* normMats) const
 {
     if (cubeMapID != 0) {
         glActiveTexture(GL_TEXTURE0);
@@ -115,7 +115,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
     if (mesh->mMaterialIndex >= 0) {
         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
         vector<Texture> diffuseMaps = loadMaterialTextures(material,
-            aiTextureType_DIFFUSE, "diffuse");
+            aiTextureType_DIFFUSE, "diffuse", bSRGB);
         textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
         vector<Texture> specularMaps = loadMaterialTextures(material,
             aiTextureType_SPECULAR, "specular");
@@ -132,7 +132,7 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
 }
 
 vector<Texture> Model::loadMaterialTextures(aiMaterial* mat,
-    aiTextureType type, string typeName)
+    aiTextureType type, string typeName, bool bSRGB)
 {
     vector<Texture> textures;
     for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
@@ -146,7 +146,7 @@ vector<Texture> Model::loadMaterialTextures(aiMaterial* mat,
         }
         else {
             Texture texture;
-            texture.id = loadTexture(path);
+            texture.id = loadTexture(path, bSRGB);
             texture.location = 0;
             texture.path = path;
             texture.type = typeName;
