@@ -2,7 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <vector>
-#include <stb-master/stb_image.h>
+#include "stb_image.h"
 #include "texture_loader.h"
 
 using namespace std;

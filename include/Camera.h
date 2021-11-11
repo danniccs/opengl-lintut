@@ -118,9 +118,9 @@ public:
     void ProcessMouseScroll(float yoffset) {
         if (Zoom <= 45.0f && Zoom >= 1.0f && Zoom-yoffset >= 1.0f && Zoom-yoffset <= 45.0f)
             Zoom -= yoffset;
-        else if (Zoom < 1.0f || Zoom <= 45.0f && Zoom-yoffset < 1.0f)
+        else if (Zoom < 1.0f || (Zoom <= 45.0f && Zoom-yoffset < 1.0f))
             Zoom = 1.0f;
-        else if (Zoom > 45.0f || Zoom >= 1.0f && Zoom-yoffset > 45.0f)
+        else if (Zoom > 45.0f || (Zoom >= 1.0f && Zoom-yoffset > 45.0f))
             Zoom = 45.0f;
     }
 

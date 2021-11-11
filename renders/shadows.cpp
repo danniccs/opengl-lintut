@@ -1,4 +1,4 @@
-#include <glad/glad.h>
+#include "glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <filesystem>
@@ -14,7 +14,7 @@
 #include <glm/gtx/norm.hpp>
 
 // Include stb for image loading
-#include <stb-master/stb_image.h>
+#include "stb_image.h"
 
 #include "Camera.h" // Camera class
 #include "Shader.h" // Shader class
@@ -22,10 +22,10 @@
 #include "Model.h" // Model class
 #include "misc_sources.h" // framebuffer size callback and input processing
 #include "texture_loader.h" // Utility function for loading textures (generates texture)
-#include "shadow_functions.h" // Functions used for shadow mapping
 #include "SimpleMesh.h"
 
 namespace fs = std::filesystem;
+fs::path shaderPath(fs::current_path() / "shaders");
 
 // Set number of point lights and instances
 const unsigned int NR_POINT_LIGHTS = 4;
@@ -66,7 +66,7 @@ namespace toggles {  // Only changed by input processing
     bool g_showNorms{ false };
     bool g_blinn{ true };
     bool g_Wireframe{ false };
-};
+}
 
 int main() {
     glfwInit();
@@ -132,22 +132,20 @@ int main() {
     glEnable(GL_FRAMEBUFFER_SRGB);
 
     // compile and link the shader programs
-    const Shader sProg("nano_shadow_vert.glsl", "nano_shadow_frag.glsl");
-    const Shader normalVisProg("normal_vert_shader.glsl", "normal_frag_shader.glsl", "normal_geom_shader.glsl");
-    const Shader floorProg("floor_shadows_vert.glsl", "floor_shadows_frag.glsl");
-    const Shader simpleNorm("simple_normal_vert.glsl", "normal_frag_shader.glsl", "normal_geom_shader.glsl");
-    const Shader lightProg("cube_light_vert.glsl", "cube_light_frag.glsl");
-    const Shader shadowProg("shadow_map_vert.glsl", "shadow_map_frag.glsl");
+    const Shader sProg((shaderPath/"nano_shadow_vert.glsl").c_str(),
+                       (shaderPath/"nano_shadow_frag.glsl").c_str());
+    const Shader floorProg((shaderPath/"floor_shadows_vert.glsl").c_str(),
+                           (shaderPath/"floor_shadows_frag.glsl").c_str());
+    const Shader lightProg((shaderPath/"cube_light_vert.glsl").c_str(),
+                           (shaderPath/"cube_light_frag.glsl").c_str());
+    const Shader shadowProg((shaderPath/"shadow_map_vert.glsl").c_str(),
+                            (shaderPath/"shadow_map_frag.glsl").c_str());
 
     // Get the uniform IDs in the vertex shader
     const int sViewID = sProg.getUnif("view");
     const int sProjID = sProg.getUnif("projection");
-    const int normViewID = normalVisProg.getUnif("view");
-    const int normProjID = normalVisProg.getUnif("projection");
     const int floorViewID = floorProg.getUnif("view");
     const int floorProjID = floorProg.getUnif("projection");
-    const int simpNormViewID = simpleNorm.getUnif("view");
-    const int simpNormProjID = simpleNorm.getUnif("projection");
     const int lightViewID = lightProg.getUnif("view");
     const int lightProjID = lightProg.getUnif("projection");
 
@@ -218,12 +216,12 @@ int main() {
 
     // Load the light cube model
     std::vector<std::string> lightCubeTexPaths;
-    lightCubeTexPaths.push_back("white-square.png");
+    lightCubeTexPaths.push_back("white_square.png");
     SimpleMesh lightCube{ sources::cubeVertices, 36, lightCubeTexPaths };
 
     // Load cube model
     std::vector<std::string> cubeTexPaths;
-    cubeTexPaths.push_back("white-square.png");
+    cubeTexPaths.push_back("white_square.png");
     SimpleMesh cube{ sources::cubeVertices, 36, cubeTexPaths, true};
     cube.getTextureLocations(sProg);
     glm::vec3 cubePositions[] = {
@@ -242,7 +240,8 @@ int main() {
     }
 
     // Load the nanosuit model
-    Model nanosuit("nanosuit/nanosuit.obj", true);
+    fs::path nanoPath(fs::current_path()/"nanosuit_reflection/nanosuit.obj");
+    Model nanosuit(nanoPath.c_str(), true);
     nanosuit.getTextureLocations(sProg);
 
     // Declare the model, view and projection matrices
@@ -268,7 +267,9 @@ int main() {
     glm::mat4 lightView = glm::lookAt(-dirLightDir,
                                       glm::vec3(0.0f, 0.0f, 0.0f),
                                       glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
     glm::mat4 dirLightModel = glm::translate(glm::mat4(1.0f), -dirLightDir * 2.0f);
+
     float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
     glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
     //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
@@ -323,24 +324,6 @@ int main() {
         nanoMod = glm::scale(nanoMod, glm::vec3(0.2f));
         glm::mat3 nanoNorm = glm::mat3(glm::transpose(glm::inverse(view * nanoMod)));
 
-        /*
-        * Light frustum calculation!
-        * Use the inverse view-projection matrix and the inverse light model matrix
-        * to calculate the bounds of the light frustum for calculating the shadow
-        * map.
-        */
-        glm::vec3 dirRight = glm::cross(dirLightDir, glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::vec3 dirUp = glm::cross(dirRight, dirLightDir);
-        /*
-        * glm::mat4 lightProjection = altOLightFrustum(projection * view, dirLightDir,
-        *                                              dirUp, dirRight,
-        *                                              static_cast<float>(SHADOW_WIDTH));
-        * glm::mat4 lightProjection = calculateOLightFrustum(projection * view, lightView,
-        *                                                    static_cast<float>(SHADOW_WIDTH));
-        */
-        glm::mat4 lightProjection = altOLightFrustum(projection * view, dirLightDir,
-                                                     dirUp, dirRight,
-                                                     static_cast<float>(SHADOW_WIDTH));
         glm::mat4 lightSpaceMat = lightProjection * lightView;
 
         // Do a first pass to obtain the shadow map
@@ -359,7 +342,7 @@ int main() {
 
             glCullFace(GL_FRONT);
             shadowProg.setUnifS("model", nanoMod);
-            //nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
+            nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
 
             for (unsigned int i = 0; i < gCubeNR; ++i) {
                 shadowProg.setUnifS("model", cubeModels[i]);
@@ -375,16 +358,15 @@ int main() {
             floor.Draw(shadowProg, 1, nullptr, nullptr);
 
             glCullFace(GL_FRONT);
+
             shadowProg.setUnifS("model", nanoMod);
-            //nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
+            nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
 
             for (unsigned int i = 0; i < gCubeNR; ++i) {
                 shadowProg.setUnifS("model", cubeModels[i]);
                 cube.Draw(shadowProg, 1, nullptr, nullptr);
             }
             glCullFace(GL_BACK);
-
-            //glDisable(GL_DEPTH_CLAMP);
         }
 
         // Second pass
@@ -440,7 +422,7 @@ int main() {
             glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
             glActiveTexture(GL_TEXTURE5);
             glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
-            //nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
+            nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
 
             // Draw the cubes
             for (unsigned int i = 0; i < gCubeNR; ++i)
@@ -456,31 +438,6 @@ int main() {
             //lightCube.Draw(lightProg, 1, nullptr, nullptr);
             lightProg.setUnifS("model", dirLightModel);
             //lightCube.Draw(lightProg, 1, nullptr, nullptr);
-
-            // Draw the normal vectors
-            if (toggles::g_showNorms) {
-                normalVisProg.use();
-                normalVisProg.setUnif(normViewID, view);
-                normalVisProg.setUnif(normProjID, projection);
-                nanosuit.Draw(normalVisProg, NR_INSTANCES, &nanoMod, &nanoNorm);
-
-                simpleNorm.use();
-                simpleNorm.setUnif(simpNormViewID, view);
-                simpleNorm.setUnif(simpNormProjID, projection);
-                simpleNorm.setUnifS("model", floorModel);
-                simpleNorm.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(view * floorModel))));
-                floor.Draw(simpleNorm, 1, nullptr, nullptr);
-
-                simpleNorm.setUnifS("model", lightCubeModel);
-                simpleNorm.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(view * lightCubeModel))));
-                lightCube.Draw(simpleNorm, 1, nullptr, nullptr);
-
-                for (unsigned int i = 0; i < gCubeNR; ++i) {
-                    simpleNorm.setUnifS("model", cubeModels[i]);
-                    simpleNorm.setUnifS("normMat", cubeNormMats[i]);
-                    cube.Draw(simpleNorm, 1, nullptr, nullptr);
-                }
-            }
         }
 
         // buffer swap and event poll

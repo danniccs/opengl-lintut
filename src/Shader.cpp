@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iostream>
 
-#include "shader.h"
+#include "Shader.h"
 
 Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath) {
 	initVals(vertexPath, fragmentPath, geometryPath);

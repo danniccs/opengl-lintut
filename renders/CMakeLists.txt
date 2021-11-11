@@ -1,6 +1,6 @@
 target_sources(gltut
     PRIVATE
-        quick_normals.cpp
+        shadows.cpp
 )
 
 target_include_directories(gltut
