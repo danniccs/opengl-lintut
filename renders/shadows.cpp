@@ -26,6 +26,7 @@
 
 namespace fs = std::filesystem;
 fs::path shaderPath(fs::current_path() / "shaders");
+fs::path resourcePath(fs::current_path() / "resources");
 
 // Set number of point lights and instances
 const unsigned int NR_POINT_LIGHTS = 4;
@@ -136,8 +137,8 @@ int main() {
                        (shaderPath/"nano_shadow_frag.glsl").c_str());
     const Shader floorProg((shaderPath/"floor_shadows_vert.glsl").c_str(),
                            (shaderPath/"floor_shadows_frag.glsl").c_str());
-    const Shader lightProg((shaderPath/"cube_light_vert.glsl").c_str(),
-                           (shaderPath/"cube_light_frag.glsl").c_str());
+    const Shader lightProg((shaderPath/"light_sphere_vert.glsl").c_str(),
+                           (shaderPath/"light_sphere_frag.glsl").c_str());
     const Shader shadowProg((shaderPath/"shadow_map_vert.glsl").c_str(),
                             (shaderPath/"shadow_map_frag.glsl").c_str());
 
@@ -202,9 +203,9 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    // Floor VAO, texture and model
+    // Floor texture and model
     std::vector<std::string> floorTexPaths;
-    floorTexPaths.push_back("wood.png");
+    floorTexPaths.push_back((resourcePath / "wood.png").c_str());
     SimpleMesh floor{ sources::quadVertices, 6, floorTexPaths, true };
     glm::mat4 floorModel = glm::mat4(1.0f);
     floorModel = glm::translate(floorModel, glm::vec3(0.0f, -0.5f, 0.0f));
@@ -214,14 +215,9 @@ int main() {
     floorProg.setUnifS("model", floorModel);
     floorProg.setUnifS("floorTexture", 0);
 
-    // Load the light cube model
-    std::vector<std::string> lightCubeTexPaths;
-    lightCubeTexPaths.push_back("white_square.png");
-    SimpleMesh lightCube{ sources::cubeVertices, 36, lightCubeTexPaths };
-
     // Load cube model
     std::vector<std::string> cubeTexPaths;
-    cubeTexPaths.push_back("white_square.png");
+    cubeTexPaths.push_back((resourcePath / "white_square.png").c_str());
     SimpleMesh cube{ sources::cubeVertices, 36, cubeTexPaths, true};
     cube.getTextureLocations(sProg);
     glm::vec3 cubePositions[] = {
@@ -240,9 +236,13 @@ int main() {
     }
 
     // Load the nanosuit model
-    fs::path nanoPath(fs::current_path()/"nanosuit_reflection/nanosuit.obj");
-    Model nanosuit(nanoPath.c_str(), true);
+    fs::path nanoPath((resourcePath / "nanosuit_reflection/nanosuit.obj").c_str());
+    Model nanosuit(nanoPath, true);
     nanosuit.getTextureLocations(sProg);
+
+    // Load the light spheres
+    fs::path spherePath((resourcePath / "sphere.obj").c_str());
+    Model sphere(spherePath, false);
 
     // Declare the model, view and projection matrices
     glm::mat4 view;
@@ -258,10 +258,10 @@ int main() {
     float outerCutOff = glm::cos(outerRadians);
     Light spotLight("spotLight", sProg, false, 1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
     Light floorSpotLight("spotLight", floorProg, false, 1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-    // Set the position of the cube light
+    // Set the position of the light sphere
     glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
-    glm::mat4 lightCubeModel = glm::translate(glm::mat4(1.0f), spotPos);
-    lightCubeModel = glm::scale(lightCubeModel, glm::vec3(0.5f));
+    glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
+    lightSphereModel = glm::scale(lightSphereModel, glm::vec3(0.0015f));
 
     glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
     glm::mat4 lightView = glm::lookAt(-dirLightDir,
@@ -310,7 +310,7 @@ int main() {
 
         // Set the attributes of the spotlight
         glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
-        glm::vec3 spotLightColor(0.5f, 0.5f, 0.5f);
+        glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
         // Set the attributes of the directional light
         glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
 
@@ -426,11 +426,9 @@ int main() {
             lightProg.use();
             lightProg.setUnif(lightViewID, view);
             lightProg.setUnif(lightProjID, projection);
-            lightProg.setUnifS("model", lightCubeModel);
+            lightProg.setUnifS("model", lightSphereModel);
             lightProg.setUnifS("color", spotLightColor);
-            //lightCube.Draw(lightProg, 1, nullptr, nullptr);
-            lightProg.setUnifS("model", dirLightModel);
-            //lightCube.Draw(lightProg, 1, nullptr, nullptr);
+            sphere.Draw(lightProg, 1, nullptr, nullptr);
         }
 
         // buffer swap and event poll
@@ -438,6 +436,9 @@ int main() {
         glfwPollEvents();
     }
     glfwTerminate();
+    glDeleteFramebuffers(1, &shadowFBO);
+    glDeleteTextures(2, shadowMap);
+
     return 0;
 }
 
