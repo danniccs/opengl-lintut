@@ -33,6 +33,7 @@
 *.exe
 *.out
 *.app
+gltut
 
 # Build directory
 /build/*

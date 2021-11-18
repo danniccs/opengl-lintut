@@ -97,7 +97,9 @@ void main() {
     float theta = dot(lightDir, normalize(-spotLight.direction));
     float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
     float dist = length(spotLight.position - fs_in.fragPos);
-    float attenuation = 1.0 / (spotLight.constant + spotLight.linear * dist + spotLight.quadratic * (dist * dist));
+    float attenuation = 1.0 / (spotLight.constant +
+                               spotLight.linear * dist +
+                               spotLight.quadratic * (dist * dist));
     ndotl = max(dot(lightDir, normal), 0.0);
     // diffuse
     diffuse = ndotl * color * spotLight.diffuse * attenuation * intensity;

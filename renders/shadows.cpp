@@ -267,7 +267,7 @@ int main() {
     glm::mat4 lightView = glm::lookAt(-dirLightDir,
                                       glm::vec3(0.0f, 0.0f, 0.0f),
                                       glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 100.0f);
+    glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
     glm::mat4 dirLightModel = glm::translate(glm::mat4(1.0f), -dirLightDir * 2.0f);
 
     float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
@@ -306,11 +306,11 @@ int main() {
         // Create a matrix to maintain directions in view space
         glm::mat3 dirNormMat(glm::transpose(glm::inverse(view)));
         // Update the projection matrix
-        projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 50.0f);
+        projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
 
         // Set the attributes of the spotlight
         glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
-        glm::vec3 spotLightColor(1.0f, 1.0f, 1.0f);
+        glm::vec3 spotLightColor(0.5f, 0.5f, 0.5f);
         // Set the attributes of the directional light
         glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
 
@@ -330,15 +330,11 @@ int main() {
         {
             glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
             glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-            //glEnable(GL_DEPTH_CLAMP); // Remember to disable after rendering shadow maps
 
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[0], 0);
             glClear(GL_DEPTH_BUFFER_BIT);
             shadowProg.use();
             shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
-
-            shadowProg.setUnifS("model", floorModel);
-            floor.Draw(shadowProg, 1, nullptr, nullptr);
 
             glCullFace(GL_FRONT);
             shadowProg.setUnifS("model", nanoMod);
@@ -353,9 +349,6 @@ int main() {
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[1], 0);
             glClear(GL_DEPTH_BUFFER_BIT);
             shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
-
-            shadowProg.setUnifS("model", floorModel);
-            floor.Draw(shadowProg, 1, nullptr, nullptr);
 
             glCullFace(GL_FRONT);
 
@@ -389,10 +382,10 @@ int main() {
             // floor spot light
             floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
             floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));
-            floorSpotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
+            floorSpotLight.setColors(spotLightColor, 0.2f, 0.3f, 0.5f);
             // floor directional light
             floorDirLight.setDir(dirLightDir, glm::mat4(1.0f));
-            floorDirLight.setColors(dirLightColor, 0.2f, 0.45f, 0.7f);
+            floorDirLight.setColors(dirLightColor, 0.2f, 0.3f, 0.1f);
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
             glActiveTexture(GL_TEXTURE2);
