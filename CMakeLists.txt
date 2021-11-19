@@ -42,6 +42,7 @@ target_compile_options(gltut
         -pedantic
         -Wall
         -Wextra
+        -O3
 )
 
 #install(TARGETS OpenGLTutorial DESTINATION ${PROJECT_BINARY_DIR})

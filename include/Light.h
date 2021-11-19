@@ -14,13 +14,15 @@ public:
 	Light();
 	// Constructor sets some initial values and gets IDs
 	Light(const std::string name, Shader shaderProg,
-		bool directional = false, float constant = 1.0f, float linear = 1.0f,
-		float quadratic = 1.0f, float cutOff = -1.0f, float outerCutOff = -1.0f);
+		bool directional = false, float width = 0.0f, float constant = 1.0f,
+		float linear = 1.0f, float quadratic = 1.0f, float cutOff = -1.0f,
+		float outerCutOff = -1.0f);
 
 	// Initializer function for use after construction
 	void initVals(const std::string name, Shader shaderProg,
-		bool directional = false, float constant = 1.0f, float linear = 1.0f,
-		float quadratic = 1.0f, float cutOff = -1.0f, float outerCutOff = -1.0f);
+		bool directional = false, float width = 0.0f, float constant = 1.0f,
+		float linear = 1.0f, float quadratic = 1.0f, float cutOff = -1.0f,
+		float outerCutOff = -1.0f);
 
 	// Functions for setting parameters
 	void setPos(glm::vec3 position, glm::mat4 transform);

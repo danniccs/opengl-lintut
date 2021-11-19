@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include <array>
 #include <unordered_map>
 #include "Mesh.h"
 
@@ -18,15 +19,20 @@ public:
     void Draw(const Shader& shader, unsigned int numInstances, glm::mat4* models,
         glm::mat3* normMats) const;
     void getTextureLocations(Shader shader);
+    float getApproxWidth() const;
 private:
     /*  Model Data  */
+    float approxWidth;
     bool bSRGB;
+    std::array<float, 14> boundingVolumeBounds;
     std::vector<Mesh> meshes;
     std::unordered_map<std::string, Texture> loadedTextures;
     Texture cubeTex;
     unsigned int cubeMapID;
     unsigned int cubeMapLoc;
     /*  Functions   */
+    void buildBoundingVolume();
+    void approximateWidth();
     void loadModel(std::string path);
     void processNode(aiNode* node, const aiScene* scene);
     Mesh processMesh(aiMesh* mesh, const aiScene* scene);

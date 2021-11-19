@@ -11,15 +11,15 @@ const unsigned int SPEC_ID = 4;
 Light::Light() : IDs() {}
 
 Light::Light(const std::string name, Shader shaderProg, bool directional,
-    float constant, float linear, float quadratic, float cutOff,
-    float outerCutOff)
+    float width, float constant, float linear, float quadratic,
+    float cutOff, float outerCutOff)
 {
-    initVals(name, shaderProg, directional, constant, linear, quadratic,
-        cutOff, outerCutOff);
+    initVals(name, shaderProg, directional, width, constant, linear,
+        quadratic, cutOff, outerCutOff);
 }
 
 void Light::initVals(const std::string name, Shader shaderProg,
-    bool directional, float constant, float linear,
+    bool directional, float width, float constant, float linear,
     float quadratic, float cutOff, float outerCutOff)
 {
     shader = shaderProg;
@@ -30,6 +30,7 @@ void Light::initVals(const std::string name, Shader shaderProg,
     shader.setUnifS(name + ".quadratic", quadratic);
     shader.setUnifS(name + ".cutOff", cutOff);
     shader.setUnifS(name + ".outerCutOff", outerCutOff);
+    shader.setUnifS(name + ".width", width);
     IDs[POS_ID] = shader.getUnif(name + ".position");
     IDs[DIR_ID] = shader.getUnif(name + ".direction");
     IDs[AMB_ID] = shader.getUnif(name + ".ambient");

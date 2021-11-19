@@ -155,12 +155,12 @@ int main() {
     glGenFramebuffers(1, &shadowFBO);
     unsigned int shadowMap[2];
     glGenTextures(2, shadowMap);
+    float borderColor[]{ 1.0f, 1.0f, 1.0f, 1.0f };
     glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
                  0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    float borderColor[]{ 1.0f, 1.0f, 1.0f, 1.0f };
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
@@ -243,13 +243,15 @@ int main() {
     // Load the light spheres
     fs::path spherePath((resourcePath / "sphere.obj").c_str());
     Model sphere(spherePath, false);
+    float wLight = sphere.getApproxWidth();
+    float lightSphereScaling = 0.0015f;
 
     // Declare the model, view and projection matrices
     glm::mat4 view;
     glm::mat4 projection;
 
     // Set the directional light attributes
-    Light dirLight("directionalLight", sProg, true);
+    Light dirLight("directionalLight", sProg, true, wLight * lightSphereScaling);
     Light floorDirLight("dirLight", floorProg, true);
 
     // Set spotlight attributes
@@ -261,7 +263,7 @@ int main() {
     // Set the position of the light sphere
     glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
     glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
-    lightSphereModel = glm::scale(lightSphereModel, glm::vec3(0.0015f));
+    lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
 
     glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
     glm::mat4 lightView = glm::lookAt(-dirLightDir,

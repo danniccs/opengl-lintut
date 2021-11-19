@@ -3,6 +3,7 @@
 #include <iostream>
 #include "Model.h"
 #include "texture_loader.h"
+#include "plane_normals.h"
 
 using namespace std;
 
@@ -46,6 +47,41 @@ void Model::getTextureLocations(Shader shader) {
         meshes[i].getTextureLocations(shader);
 }
 
+// Approximation of the maximum distance of vertices in the model.
+float Model::getApproxWidth() const {
+    return approxWidth;
+}
+
+/*
+    Calculates the bounding volume of the model using the plane normals
+    in plane_normals.h.
+*/
+void Model::buildBoundingVolume() {
+    float dMin, dMax;
+    for (unsigned int i = 0; i < boundingVolumeBounds.size() / 2; ++i) {
+        glm::vec3 normal = planeNormals[i];
+        dMin = glm::dot(meshes[0].vertices[0].position, normal);
+        dMax = dMin;
+        for (const auto& mesh : meshes) {
+            for (const auto& vertex : mesh.vertices) {
+                dMin = min(dMin, glm::dot(vertex.position, normal));
+                dMax = max(dMax, glm::dot(vertex.position, normal));
+            }
+        }
+        boundingVolumeBounds[i] = (dMin);
+        boundingVolumeBounds[i] = (dMax);
+    }
+}
+
+// Approximate the model width using the bounding volume.
+void Model::approximateWidth() {
+    approxWidth = 0.0f;
+    for (unsigned int i = 0; i < boundingVolumeBounds.size(); i = i+2) {
+        approxWidth = max(approxWidth,
+                          boundingVolumeBounds[i+1] - boundingVolumeBounds[i]);
+    }
+}
+
 void Model::loadModel(string path) {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(path, aiProcessSteps);
@@ -58,6 +94,9 @@ void Model::loadModel(string path) {
     directory = path.substr(0, path.find_last_of('/'));
 
     processNode(scene->mRootNode, scene);
+
+    buildBoundingVolume();
+    approximateWidth();
 }
 
 void Model::processNode(aiNode* node, const aiScene* scene) {
