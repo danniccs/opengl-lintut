@@ -164,8 +164,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
     glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
                  0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
@@ -174,8 +172,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
     // Bind the texture as the depth attachment
     glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
     glDrawBuffer(GL_NONE);
@@ -381,6 +377,8 @@ int main() {
             floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
             floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
             floorProg.setUnifS("viewPos", cam.Position);
+            // Set shadow map texel size
+            floorProg.setUnifS("shadowTexelSize", glm::vec2(1/SHADOW_WIDTH, 1/SHADOW_HEIGHT));
             // floor spot light
             floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
             floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));

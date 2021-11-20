@@ -19,6 +19,7 @@ struct Light {
     float cutOff; // max angle at which it gives full light
     float outerCutOff; // max angle at which it gives any light
     bool directional;
+    float width;
 
     vec3 ambient;
     vec3 diffuse;
@@ -42,8 +43,8 @@ out vec4 FragColor;
 uniform Material material;
 uniform Light directionalLight;
 uniform Light spotLight;
-uniform sampler2DShadow shadowMap;
-uniform sampler2DShadow spotShadowMap;
+uniform sampler2D shadowMap;
+uniform sampler2D spotShadowMap;
 
 vec2 poissonDisk[4] = vec2[](
   vec2( -0.94201624, -0.39906216 ),
@@ -55,7 +56,7 @@ float poissonSpread = 700.0;
 
 vec3 calcLight(Light light, vec3 normal, vec3 viewDir, float shadow);
 vec3 calcSimpleLight(Light light, vec3 normal, vec3 viewDir, float shadow);
-float shadowCalculation(vec4 pos, float ndotl, sampler2DShadow map);
+float shadowCalculation(vec4 pos, float ndotl, sampler2D map);
 
 void main() {
     vec3 result = vec3(0.0);
@@ -191,7 +192,7 @@ vec3 calcSimpleLight(Light light, vec3 normal, vec3 viewDir, float shadow) {
     return ambient + shadow * (diffuse + specular);
 }
 
-float shadowCalculation(vec4 pos, float ndotl, sampler2DShadow map) {
+float shadowCalculation(vec4 pos, float ndotl, sampler2D map) {
     // perform perspective divide
     vec3 projCoords;
     if (pos.w != 0.0)
@@ -210,8 +211,8 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2DShadow map) {
         projCoords.z -= bias;
 
         for (int i = 0; i < 4; i++) {
-            vec3 sampleCoords = vec3(projCoords.xy + poissonDisk[i] / poissonSpread, projCoords.z);
-            shadow += texture(map, sampleCoords);
+            vec2 sampleCoords = vec2(projCoords.xy + poissonDisk[i] / poissonSpread);
+            shadow += texture(map, sampleCoords).r < projCoords.z ? 1.0 : 0.0;
         }
         shadow *= 0.25;
     }

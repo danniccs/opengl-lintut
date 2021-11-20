@@ -25,12 +25,12 @@ void Light::initVals(const std::string name, Shader shaderProg,
     shader = shaderProg;
     shader.use();
     shader.setUnifS(name + ".directional", directional);
+    shader.setUnifS(name + ".width", width);
     shader.setUnifS(name + ".constant", constant);
     shader.setUnifS(name + ".linear", linear);
     shader.setUnifS(name + ".quadratic", quadratic);
     shader.setUnifS(name + ".cutOff", cutOff);
     shader.setUnifS(name + ".outerCutOff", outerCutOff);
-    shader.setUnifS(name + ".width", width);
     IDs[POS_ID] = shader.getUnif(name + ".position");
     IDs[DIR_ID] = shader.getUnif(name + ".direction");
     IDs[AMB_ID] = shader.getUnif(name + ".ambient");

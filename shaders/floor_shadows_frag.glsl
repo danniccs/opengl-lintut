@@ -15,6 +15,7 @@ struct Light {
     float cutOff; // max angle at which it gives full light
     float outerCutOff; // max angle at which it gives any light
     bool directional;
+    float width;
 
     vec3 ambient;
     vec3 diffuse;
@@ -27,11 +28,12 @@ struct Light {
 
 uniform sampler2D floorTexture;
 uniform sampler2D randomAngles;
-uniform sampler2DShadow shadowMap;
-uniform sampler2DShadow spotShadowMap;
+uniform sampler2D shadowMap;
+uniform sampler2D spotShadowMap;
 uniform vec3 viewPos;
 uniform Light spotLight;
 uniform Light dirLight;
+uniform vec2 shadowTexelSize;
 
 vec2 poissonDisk[4] = vec2[](
   vec2( -0.94201624, -0.39906216 ),
@@ -41,14 +43,14 @@ vec2 poissonDisk[4] = vec2[](
 );
 float poissonSpread = 700.0;
 
-float shadowCalculation(vec4 pos, float ndotl, sampler2DShadow map) {
+float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
     // perform perspective divide
     vec3 projCoords = pos.xyz / pos.w;
     // transform to [0,1] range
     projCoords = projCoords * 0.5 + 0.5;
     // Get random coordinates to rotate poisson disk
-    ivec2 angleTexCoords = ivec2(fs_in.fragPos.x, fs_in.fragPos.y);
-    vec4 rotation = texture(randomAngles, angleTexCoords, 0);
+    // ivec2 angleTexCoords = ivec2(fs_in.fragPos.x, fs_in.fragPos.y);
+    // vec4 rotation = texture(randomAngles, angleTexCoords, 0);
 
     float shadow = 0.0;
     // Check if fragment is beyond far plane of frustum
@@ -56,14 +58,37 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2DShadow map) {
         float bias = max(0.02 * (1.0 -  ndotl), 0.005);
         projCoords.z -= bias;
 
-        // check whether fragment is in shadow or not
-        for (int i = 0; i < 4; i++) {
-            float sampleX = projCoords.x + (poissonDisk[i].x + rotation.x) / poissonSpread;
-            float sampleY = projCoords.y + (poissonDisk[i].y + rotation.y) / poissonSpread;
-            vec3 sampleCoords = vec3(sampleX, sampleY, projCoords.z);
-            shadow += texture(map, sampleCoords);
+        // Calculate size of blocker search
+        int searchWidth = 8;//int(light.width * projCoords.z);
+        // Calculate average blocker depth
+        float blockerDepth = 0.0;
+        int numBlockers = 0;
+        int searchOffset = searchWidth / 2;
+        for (int i = -searchOffset; i <= searchOffset; ++i) {
+            for (int j = -searchOffset; j <= searchOffset; ++j) {
+                float depth = texture(map, projCoords.xy + vec2(i, j) * shadowTexelSize).r;
+                if (depth < projCoords.z) {
+                    blockerDepth += depth;
+                    ++numBlockers;
+                }
+            }
         }
-        shadow *= 0.25;
+        blockerDepth /= numBlockers;
+
+        // Use PCF to calculate shadow value
+        if (numBlockers > 0) {
+            int wPenumbra = int((projCoords.z - blockerDepth) * light.width / blockerDepth * 100);
+            int pcfOffset = wPenumbra / 2;
+            for (int i = -pcfOffset; i <= pcfOffset; ++i) {
+                for (int j = -pcfOffset; j <= pcfOffset; ++j) {
+                    float depth = texture(map, projCoords.xy + vec2(i, j) * shadowTexelSize).r;
+                    shadow += depth < projCoords.z ? 0.0 : 1.0;
+                }
+            }
+            shadow *= 1 / float(pow(wPenumbra, 2));
+        }
+        else
+            shadow = 1.0;
     }
     else
         shadow = 1.0;
@@ -88,7 +113,7 @@ void main() {
     float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
     vec3 specular = dirLight.specular * spec; // assuming bright white light color
 
-    float dirShadow = shadowCalculation(fs_in.fragPosLightSpace, ndotl, shadowMap);
+    float dirShadow = shadowCalculation(fs_in.fragPosLightSpace, ndotl, shadowMap, dirLight);
     vec3 dirColor = ambient + dirShadow * (diffuse + specular);
 
     // Spot light
@@ -108,7 +133,7 @@ void main() {
     spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
     specular = spotLight.specular * spec * attenuation * intensity;
 
-    float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap);
+    float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap, spotLight);
     vec3 spotColor = spotShadow * (diffuse + specular);
 
     FragColor = vec4(dirColor + spotColor, 1.0);
