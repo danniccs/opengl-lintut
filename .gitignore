@@ -39,3 +39,6 @@ gltut
 
 # Nanosuit files
 /nanosuit_reflection/*
+
+# Visual Code directory
+/.vscode/*
