@@ -26,6 +26,14 @@ struct Light {
     float quadratic;
 };
 
+layout (std140, binding = 0) uniform shadowBlock {
+    vec2 shadowTexelSize;
+    vec2 poissonDisk[32];
+    float poissonSpread;
+    int NUM_SEARCH_SAMPLES;
+    int NUM_PCF_SAMPLES;
+};
+
 uniform sampler2D floorTexture;
 uniform sampler2D randomAngles;
 uniform sampler2D shadowMap;
@@ -33,59 +41,57 @@ uniform sampler2D spotShadowMap;
 uniform vec3 viewPos;
 uniform Light spotLight;
 uniform Light dirLight;
-uniform vec2 shadowTexelSize;
 
-vec2 poissonDisk[4] = vec2[](
-  vec2( -0.94201624, -0.39906216 ),
-  vec2( 0.94558609, -0.76890725 ),
-  vec2( -0.094184101, -0.92938870 ),
-  vec2( 0.34495938, 0.29387760 )
-);
-float poissonSpread = 700.0;
+float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map, vec4 rotation) {
+    // Calculate size of blocker search
+    float searchWidth = max(2.0, light.width * projCoords.z / 10.0);
+
+    // Calculate average blocker depth
+    float blockerDepth = 0.0;
+    int numBlockers = 0;
+
+    for (int i = 0; i <= NUM_SEARCH_SAMPLES; ++i) {
+        vec2 offset = vec2(poissonDisk[i].x * rotation.x,
+                           poissonDisk[i].y * rotation.y);
+        float depth = texture(map, projCoords.xy + offset * shadowTexelSize * searchWidth).r;
+        if (depth < projCoords.z) {
+            blockerDepth += depth;
+            ++numBlockers;
+        }
+    }
+    return blockerDepth /= numBlockers;
+}
 
 float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
     // perform perspective divide
     vec3 projCoords = pos.xyz / pos.w;
     // transform to [0,1] range
     projCoords = projCoords * 0.5 + 0.5;
-    // Get random coordinates to rotate poisson disk
-    // ivec2 angleTexCoords = ivec2(fs_in.fragPos.x, fs_in.fragPos.y);
-    // vec4 rotation = texture(randomAngles, angleTexCoords, 0);
 
     float shadow = 0.0;
     // Check if fragment is beyond far plane of frustum
     if (projCoords.z <= 1.0) {
+
+        // Get random coordinates to rotate poisson disk
+        ivec2 angleTexCoords = ivec2(fs_in.fragPos.x, fs_in.fragPos.y);
+        vec4 rotation = texture(randomAngles, angleTexCoords, 0);
+
         float bias = max(0.02 * (1.0 -  ndotl), 0.005);
         projCoords.z -= bias;
 
-        // Calculate size of blocker search
-        int searchWidth = 8;//int(light.width * projCoords.z);
-        // Calculate average blocker depth
-        float blockerDepth = 0.0;
-        int numBlockers = 0;
-        int searchOffset = searchWidth / 2;
-        for (int i = -searchOffset; i <= searchOffset; ++i) {
-            for (int j = -searchOffset; j <= searchOffset; ++j) {
-                float depth = texture(map, projCoords.xy + vec2(i, j) * shadowTexelSize).r;
-                if (depth < projCoords.z) {
-                    blockerDepth += depth;
-                    ++numBlockers;
-                }
-            }
-        }
-        blockerDepth /= numBlockers;
+        // Estimate average blocker depth
+        float blockerDepth = estimateBlockerDepth(projCoords, light, map, rotation);
 
         // Use PCF to calculate shadow value
-        if (numBlockers > 0) {
-            int wPenumbra = int((projCoords.z - blockerDepth) * light.width / blockerDepth * 100);
-            int pcfOffset = wPenumbra / 2;
-            for (int i = -pcfOffset; i <= pcfOffset; ++i) {
-                for (int j = -pcfOffset; j <= pcfOffset; ++j) {
-                    float depth = texture(map, projCoords.xy + vec2(i, j) * shadowTexelSize).r;
-                    shadow += depth < projCoords.z ? 0.0 : 1.0;
-                }
+        if (blockerDepth > 0.0) {
+            float wPenumbra = max(2.0, (projCoords.z - blockerDepth) * light.width / blockerDepth * 200.0);
+            for (int i = 0; i <= NUM_PCF_SAMPLES; ++i) {
+                vec2 offset = vec2(poissonDisk[i].x * rotation.x,
+                                   poissonDisk[i].y * rotation.y);
+                float depth = texture(map, projCoords.xy + offset * shadowTexelSize * wPenumbra).r;
+                shadow += depth < projCoords.z ? 0.0 : 1.0;
             }
-            shadow *= 1 / float(pow(wPenumbra, 2));
+            shadow /= NUM_PCF_SAMPLES;
         }
         else
             shadow = 1.0;

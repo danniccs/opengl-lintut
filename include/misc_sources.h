@@ -41,6 +41,8 @@ namespace sources {
     extern const glm::vec3 cubePositions[2];
 
     extern const glm::vec3 grassCoordinates[5];
+
+    extern const glm::vec2 poissonDisc[32];
 }
 
 #endif

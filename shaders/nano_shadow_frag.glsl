@@ -38,6 +38,14 @@ in VS_OUT {
     vec4 fragPosSpotSpace;
 } fs_in;
 
+layout (std140, binding = 0) uniform shadowBlock {
+    vec2 shadowTexelSize;
+    vec2 poissonDisk[32];
+    float poissonSpread;
+    int NUM_SEARCH_SAMPLES;
+    int NUM_PCF_SAMPLES;
+};
+
 out vec4 FragColor;
 
 uniform Material material;
@@ -46,14 +54,6 @@ uniform Light spotLight;
 uniform sampler2D shadowMap;
 uniform sampler2D spotShadowMap;
 
-vec2 poissonDisk[4] = vec2[](
-  vec2( -0.94201624, -0.39906216 ),
-  vec2( 0.94558609, -0.76890725 ),
-  vec2( -0.094184101, -0.92938870 ),
-  vec2( 0.34495938, 0.29387760 )
-);
-float poissonSpread = 700.0;
-
 vec3 calcLight(Light light, vec3 normal, vec3 viewDir, float shadow);
 vec3 calcSimpleLight(Light light, vec3 normal, vec3 viewDir, float shadow);
 float shadowCalculation(vec4 pos, float ndotl, sampler2D map);
@@ -61,7 +61,7 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map);
 void main() {
     vec3 result = vec3(0.0);
     vec3 normal = normalize(fs_in.norm);
-    vec3 viewDir = normalize(vec3(0.0) - fs_in.viewObjPos); // since we are in view coordinates, the camera is always at 0,0,0
+    vec3 viewDir = normalize(-fs_in.viewObjPos); // since we are in view coordinates, the camera is always at 0,0,0
 
     // Shadow from directional light
     vec3 l = -directionalLight.direction;

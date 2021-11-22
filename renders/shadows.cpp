@@ -58,6 +58,9 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 const unsigned int SHADOW_WIDTH = 1024;
 const unsigned int SHADOW_HEIGHT = 1024;
+const float POISSON_SPREAD = 400.0;
+const unsigned int NUM_SEARCH_SAMPLES = 32;
+const unsigned int NUM_PCF_SAMPLES = 48;
 const unsigned int gCubeNR = 4;
 
 namespace toggles {  // Only changed by input processing
@@ -199,6 +202,20 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
+    // Create a UBO for global shadow information and bind it.
+    glm::vec2 shadowTexelSize(1/SHADOW_WIDTH, 1/SHADOW_HEIGHT);
+    unsigned int shadowUBO;
+    glGenBuffers(1, &shadowUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
+    glBufferData(GL_UNIFORM_BUFFER, 532, NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, 8, &shadowTexelSize);
+    glBufferSubData(GL_UNIFORM_BUFFER, 16, 32*16, sources::poissonDisc);
+    glBufferSubData(GL_UNIFORM_BUFFER, 33*16, 4, &POISSON_SPREAD);
+    glBufferSubData(GL_UNIFORM_BUFFER, 33*16 + 4, 4, &NUM_SEARCH_SAMPLES);
+    glBufferSubData(GL_UNIFORM_BUFFER, 33*16 + 8, 4, &NUM_PCF_SAMPLES);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
     // Floor texture and model
     std::vector<std::string> floorTexPaths;
     floorTexPaths.push_back((resourcePath / "wood.png").c_str());
@@ -270,6 +287,7 @@ int main() {
 
     float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
     glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
+    // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
     //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 
     sProg.use();
@@ -377,8 +395,6 @@ int main() {
             floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
             floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
             floorProg.setUnifS("viewPos", cam.Position);
-            // Set shadow map texel size
-            floorProg.setUnifS("shadowTexelSize", glm::vec2(1/SHADOW_WIDTH, 1/SHADOW_HEIGHT));
             // floor spot light
             floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
             floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));
