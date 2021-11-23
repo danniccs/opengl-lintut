@@ -135,325 +135,335 @@ int main() {
     // Enable gamma correction
     glEnable(GL_FRAMEBUFFER_SRGB);
 
-    // compile and link the shader programs
-    const Shader sProg((shaderPath/"nano_shadow_vert.glsl").c_str(),
-                       (shaderPath/"nano_shadow_frag.glsl").c_str());
-    const Shader floorProg((shaderPath/"floor_shadows_vert.glsl").c_str(),
-                           (shaderPath/"floor_shadows_frag.glsl").c_str());
-    const Shader lightProg((shaderPath/"light_sphere_vert.glsl").c_str(),
-                           (shaderPath/"light_sphere_frag.glsl").c_str());
-    const Shader shadowProg((shaderPath/"shadow_map_vert.glsl").c_str(),
-                            (shaderPath/"shadow_map_frag.glsl").c_str());
+    // Define lifetime of objects so arrays and buffers are freed before glfwTerminate is called.
+    {
+        // compile and link the shader programs
+        const Shader sProg((shaderPath/"nano_shadow_vert.glsl").c_str(),
+                           (shaderPath/"nano_shadow_frag.glsl").c_str());
+        const Shader floorProg((shaderPath/"floor_shadows_vert.glsl").c_str(),
+                               (shaderPath/"floor_shadows_frag.glsl").c_str());
+        const Shader lightProg((shaderPath/"light_sphere_vert.glsl").c_str(),
+                               (shaderPath/"light_sphere_frag.glsl").c_str());
+        const Shader shadowProg((shaderPath/"shadow_map_vert.glsl").c_str(),
+                                (shaderPath/"shadow_map_frag.glsl").c_str());
 
-    // Get the uniform IDs in the vertex shader
-    const int sViewID = sProg.getUnif("view");
-    const int sProjID = sProg.getUnif("projection");
-    const int floorViewID = floorProg.getUnif("view");
-    const int floorProjID = floorProg.getUnif("projection");
-    const int lightViewID = lightProg.getUnif("view");
-    const int lightProjID = lightProg.getUnif("projection");
+        // Get the uniform IDs in the vertex shader
+        const int sViewID = sProg.getUnif("view");
+        const int sProjID = sProg.getUnif("projection");
+        const int floorViewID = floorProg.getUnif("view");
+        const int floorProjID = floorProg.getUnif("projection");
+        const int lightViewID = lightProg.getUnif("view");
+        const int lightProjID = lightProg.getUnif("projection");
 
-    // Create shadow map generation framebuffer
-    unsigned int shadowFBO;
-    glGenFramebuffers(1, &shadowFBO);
-    unsigned int shadowMap[2];
-    glGenTextures(2, shadowMap);
-    float borderColor[]{ 1.0f, 1.0f, 1.0f, 1.0f };
-    glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
-                 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
-                 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    // Bind the texture as the depth attachment
-    glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        // Create shadow map generation framebuffer
+        unsigned int shadowFBO;
+        glGenFramebuffers(1, &shadowFBO);
+        unsigned int shadowMap[2];
+        glGenTextures(2, shadowMap);
+        float borderColor[]{ 1.0f, 1.0f, 1.0f, 1.0f };
+        glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
+                     0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+        glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
+                     0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+        // Bind the texture as the depth attachment
+        glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // Create a texture with random rotations for Poisson disk sampling rotation
-    std::array<std::array<glm::vec2, 32>, 32> randomAngles;
-    using std::chrono::milliseconds;
-    unsigned int seed = static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count());
-    std::mt19937 randGenerator(seed);
-    std::uniform_real_distribution<float> uniformDistribution(0.0f, glm::radians(180.0f));
-    for (std::array<glm::vec2, 32>& a : randomAngles) {
-        for (glm::vec2& v : a) {
-            float randomAngle = uniformDistribution(randGenerator);
-            v = glm::vec2(glm::cos(randomAngle) * 0.5 + 0.5, glm::sin(randomAngle) * 0.5 + 0.5);
-        }
-    }
-    unsigned int randomTexture;
-    glGenTextures(1, &randomTexture);
-    glBindTexture(GL_TEXTURE_2D, randomTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 32, 32, 0, GL_RG, GL_FLOAT, &randomAngles);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    // Create a UBO for global shadow information and bind it.
-    glm::vec2 shadowTexelSize(1/SHADOW_WIDTH, 1/SHADOW_HEIGHT);
-    unsigned int shadowUBO;
-    glGenBuffers(1, &shadowUBO);
-    glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
-    glBufferData(GL_UNIFORM_BUFFER, 532, NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, 8, &shadowTexelSize);
-    glBufferSubData(GL_UNIFORM_BUFFER, 16, 32*16, sources::poissonDisc);
-    glBufferSubData(GL_UNIFORM_BUFFER, 33*16, 4, &POISSON_SPREAD);
-    glBufferSubData(GL_UNIFORM_BUFFER, 33*16 + 4, 4, &NUM_SEARCH_SAMPLES);
-    glBufferSubData(GL_UNIFORM_BUFFER, 33*16 + 8, 4, &NUM_PCF_SAMPLES);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
-
-    // Floor texture and model
-    std::vector<std::string> floorTexPaths;
-    floorTexPaths.push_back((resourcePath / "wood.png").c_str());
-    SimpleMesh floor{ sources::quadVertices, 6, floorTexPaths, true };
-    glm::mat4 floorModel = glm::mat4(1.0f);
-    floorModel = glm::translate(floorModel, glm::vec3(0.0f, -0.5f, 0.0f));
-    floorModel = glm::rotate(floorModel, -glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    floorModel = glm::scale(floorModel, glm::vec3(20.0f, 20.0f, 1.0f));
-    floorProg.use();
-    floorProg.setUnifS("model", floorModel);
-    floorProg.setUnifS("floorTexture", 0);
-
-    // Load cube model
-    std::vector<std::string> cubeTexPaths;
-    cubeTexPaths.push_back((resourcePath / "white_square.png").c_str());
-    SimpleMesh cube{ sources::cubeVertices, 36, cubeTexPaths, true};
-    cube.getTextureLocations(sProg);
-    glm::vec3 cubePositions[] = {
-        glm::vec3(1.0f, 0.5f, 0.5f),
-        glm::vec3(4.0f, 0.5f, 0.5f),
-        glm::vec3(-1.0f, 3.5f, 0.5f),
-        glm::vec3(1.0f, 0.5f, -3.0f),
-    };
-    std::vector<glm::mat4> cubeModels(gCubeNR);
-    std::vector<glm::mat3> cubeNormMats(gCubeNR);
-    glm::mat4 model;
-    for (unsigned int i = 0; i < gCubeNR; ++i) {
-        model = glm::translate(glm::mat4(1.0f), cubePositions[i]);
-        model = glm::rotate(model, glm::radians(20.0f * i), glm::vec3(1.0f, 0.0f, 0.0f));
-        cubeModels[i] = model;
-    }
-
-    // Load the nanosuit model
-    fs::path nanoPath((resourcePath / "nanosuit_reflection/nanosuit.obj").c_str());
-    Model nanosuit(nanoPath, true);
-    nanosuit.getTextureLocations(sProg);
-
-    // Load the light spheres
-    fs::path spherePath((resourcePath / "sphere.obj").c_str());
-    Model sphere(spherePath, false);
-    float wLight = sphere.getApproxWidth();
-    float lightSphereScaling = 0.0015f;
-
-    // Declare the model, view and projection matrices
-    glm::mat4 view;
-    glm::mat4 projection;
-
-    // Set the directional light attributes
-    Light dirLight("directionalLight", sProg, true, wLight * lightSphereScaling);
-    Light floorDirLight("dirLight", floorProg, true);
-
-    // Set spotlight attributes
-    float cutOff = glm::cos(glm::radians(70.0f));
-    constexpr float outerRadians = glm::radians(120.0f);
-    float outerCutOff = glm::cos(outerRadians);
-    Light spotLight("spotLight", sProg, false, 1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-    Light floorSpotLight("spotLight", floorProg, false, 1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-    // Set the position of the light sphere
-    glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
-    glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
-    lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
-
-    glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
-    glm::mat4 lightView = glm::lookAt(-dirLightDir,
-                                      glm::vec3(0.0f, 0.0f, 0.0f),
-                                      glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
-    glm::mat4 dirLightModel = glm::translate(glm::mat4(1.0f), -dirLightDir * 2.0f);
-
-    float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
-    glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
-    // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
-    //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-
-    sProg.use();
-    sProg.setUnifS("shadowMap", 4);
-    sProg.setUnifS("spotShadowMap", 5);
-    floorProg.use();
-    floorProg.setUnifS("shadowMap", 1);
-    floorProg.setUnifS("spotShadowMap", 2);
-
-    while (!glfwWindowShouldClose(window)) {
-
-        currentFrame = static_cast <float> (glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
-        // Switch between wireframe
-        if (toggles::g_Wireframe)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        else
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-        // input
-        processInput(window);
-
-        // render
-        /*
-        Update Matrices
-        ---------------
-        */
-        // Update the camera view
-        view = cam.GetViewMatrix();
-        // Create a matrix to maintain directions in view space
-        glm::mat3 dirNormMat(glm::transpose(glm::inverse(view)));
-        // Update the projection matrix
-        projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
-
-        // Set the attributes of the spotlight
-        glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
-        glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
-        // Set the attributes of the directional light
-        glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
-
-        glm::mat4 spotView = glm::lookAt(spotPos,
-                                         spotPos + spotLightDir,
-                                         glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 spotSpaceMat = spotProjection * spotView;
-
-        glm::mat4 nanoMod = glm::mat4(1.0f);
-        nanoMod = glm::translate(nanoMod, glm::vec3(3.0f, -0.52f, 1.0f));
-        nanoMod = glm::scale(nanoMod, glm::vec3(0.2f));
-        glm::mat3 nanoNorm = glm::mat3(glm::transpose(glm::inverse(view * nanoMod)));
-
-        glm::mat4 lightSpaceMat = lightProjection * lightView;
-
-        // Do a first pass to obtain the shadow map
-        {
-            glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-            glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[0], 0);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            shadowProg.use();
-            shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
-
-            glCullFace(GL_FRONT);
-            shadowProg.setUnifS("model", nanoMod);
-            nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
-
-            for (unsigned int i = 0; i < gCubeNR; ++i) {
-                shadowProg.setUnifS("model", cubeModels[i]);
-                cube.Draw(shadowProg, 1, nullptr, nullptr);
+        // Create a texture with random rotations for Poisson disk sampling rotation
+        std::array<std::array<glm::vec2, 32>, 32> randomAngles;
+        using std::chrono::milliseconds;
+        unsigned int seed = static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count());
+        std::mt19937 randGenerator(seed);
+        std::uniform_real_distribution<float> uniformDistribution(0.0f, glm::radians(180.0f));
+        for (std::array<glm::vec2, 32>& a : randomAngles) {
+            for (glm::vec2& v : a) {
+                float randomAngle = uniformDistribution(randGenerator);
+                v = glm::vec2(glm::cos(randomAngle), glm::sin(randomAngle));
             }
-            glCullFace(GL_BACK);
+        }
+        unsigned int randomTexture;
+        glGenTextures(1, &randomTexture);
+        glBindTexture(GL_TEXTURE_2D, randomTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 32, 32, 0, GL_RG, GL_FLOAT, &randomAngles);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[1], 0);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
+        // Create a UBO for global shadow information and bind it.
+        glm::vec2 shadowTexelSize(1.0f/SHADOW_WIDTH, 1.0f/SHADOW_HEIGHT);
+        unsigned int shadowUBO;
+        glGenBuffers(1, &shadowUBO);
+        glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
+        size_t UBOSize = 32*sizeof(glm::vec4) + sizeof(glm::vec2) + 3 * sizeof(float);
+        glBufferData(GL_UNIFORM_BUFFER, UBOSize, NULL, GL_STATIC_DRAW);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, 32*sizeof(glm::vec4), sources::poissonDisc);
+        glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4), sizeof(glm::vec2), &shadowTexelSize);
+        glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4) + sizeof(glm::vec2), 4, &NUM_SEARCH_SAMPLES);
+        glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4) + sizeof(glm::vec2) + 4, 4, &NUM_PCF_SAMPLES);
+        glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4) + sizeof(glm::vec2) + 8, 4, &POISSON_SPREAD);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-            glCullFace(GL_FRONT);
+        // Floor texture and model
+        std::vector<std::string> floorTexPaths;
+        floorTexPaths.push_back((resourcePath / "wood.png").c_str());
+        SimpleMesh floor{ sources::quadVertices, 6, floorTexPaths, true };
+        glm::mat4 floorModel = glm::mat4(1.0f);
+        floorModel = glm::translate(floorModel, glm::vec3(0.0f, -0.5f, 0.0f));
+        floorModel = glm::rotate(floorModel, -glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        floorModel = glm::scale(floorModel, glm::vec3(20.0f, 20.0f, 1.0f));
+        floorProg.use();
+        floorProg.setUnifS("model", floorModel);
+        floorProg.setUnifS("floorTexture", 0);
 
-            shadowProg.setUnifS("model", nanoMod);
-            nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
+        // Load cube model
+        std::vector<std::string> cubeTexPaths;
+        cubeTexPaths.push_back((resourcePath / "white_square.png").c_str());
+        SimpleMesh cube{ sources::cubeVertices, 36, cubeTexPaths, true};
+        cube.getTextureLocations(sProg);
+        glm::vec3 cubePositions[] = {
+            glm::vec3(1.0f, 0.5f, 0.5f),
+            glm::vec3(4.0f, 0.5f, 0.5f),
+            glm::vec3(-1.0f, 3.5f, 0.5f),
+            glm::vec3(1.0f, 0.5f, -3.0f),
+        };
+        std::vector<glm::mat4> cubeModels(gCubeNR);
+        std::vector<glm::mat3> cubeNormMats(gCubeNR);
+        glm::mat4 model;
+        for (unsigned int i = 0; i < gCubeNR; ++i) {
+            model = glm::translate(glm::mat4(1.0f), cubePositions[i]);
+            model = glm::rotate(model, glm::radians(20.0f * i), glm::vec3(1.0f, 0.0f, 0.0f));
+            cubeModels[i] = model;
+        }
 
-            for (unsigned int i = 0; i < gCubeNR; ++i) {
-                shadowProg.setUnifS("model", cubeModels[i]);
-                cube.Draw(shadowProg, 1, nullptr, nullptr);
+        // Load the nanosuit model
+        fs::path nanoPath((resourcePath / "nanosuit_reflection/nanosuit.obj").c_str());
+        Model nanosuit(nanoPath, true);
+        nanosuit.getTextureLocations(sProg);
+
+        // Load the light spheres
+        fs::path spherePath((resourcePath / "sphere.obj").c_str());
+        Model sphere(spherePath, false);
+        float wLight = sphere.getApproxWidth();
+        float lightSphereScaling = 0.0015f;
+
+        // Declare the model, view and projection matrices
+        glm::mat4 view;
+        glm::mat4 projection;
+
+        // Set the directional light attributes
+        Light dirLight("directionalLight", sProg, true);
+        Light floorDirLight("dirLight", floorProg, true);
+
+        // Set spotlight attributes
+        float cutOff = glm::cos(glm::radians(70.0f));
+        constexpr float outerRadians = glm::radians(120.0f);
+        float outerCutOff = glm::cos(outerRadians);
+        Light spotLight("spotLight", sProg, false, wLight * lightSphereScaling,
+                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
+        Light floorSpotLight("spotLight", floorProg, false, wLight * lightSphereScaling,
+                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
+        // Set the position of the light sphere
+        glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
+        glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
+        lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
+
+        glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
+        glm::mat4 lightView = glm::lookAt(-dirLightDir,
+                                          glm::vec3(0.0f, 0.0f, 0.0f),
+                                          glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
+
+        float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
+        glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
+        // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
+        //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+
+        sProg.use();
+        sProg.setUnifS("shadowMap", 4);
+        sProg.setUnifS("spotShadowMap", 5);
+        floorProg.use();
+        floorProg.setUnifS("shadowMap", 1);
+        floorProg.setUnifS("spotShadowMap", 2);
+
+        while (!glfwWindowShouldClose(window)) {
+
+            currentFrame = static_cast <float> (glfwGetTime());
+            deltaTime = currentFrame - lastFrame;
+            lastFrame = currentFrame;
+
+            // Switch between wireframe
+            if (toggles::g_Wireframe)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            else
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+            // input
+            processInput(window);
+
+            // render
+            /*
+            Update Matrices
+            ---------------
+            */
+            // Update the camera view
+            view = cam.GetViewMatrix();
+            // Create a matrix to maintain directions in view space
+            glm::mat3 dirNormMat(glm::transpose(glm::inverse(view)));
+            // Update the projection matrix
+            projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
+
+            // Set the attributes of the spotlight
+            glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
+            glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
+            // Set the attributes of the directional light
+            glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
+
+            glm::mat4 spotView = glm::lookAt(spotPos,
+                                             spotPos + spotLightDir,
+                                             glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::mat4 spotSpaceMat = spotProjection * spotView;
+
+            glm::mat4 lightSpaceMat = lightProjection * lightView;
+
+            glm::mat4 nanoMod = glm::mat4(1.0f);
+            nanoMod = glm::translate(nanoMod, glm::vec3(3.0f, -0.52f, 1.0f));
+            nanoMod = glm::scale(nanoMod, glm::vec3(0.2f));
+            glm::mat3 nanoNorm = glm::mat3(glm::transpose(glm::inverse(view * nanoMod)));
+
+            // Do a first pass to obtain the shadow maps
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+                glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[0], 0);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                shadowProg.use();
+                shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
+
+                glCullFace(GL_FRONT);
+                shadowProg.setUnifS("model", nanoMod);
+                nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
+
+                for (unsigned int i = 0; i < gCubeNR; ++i) {
+                    shadowProg.setUnifS("model", cubeModels[i]);
+                    cube.Draw(shadowProg, 1, nullptr, nullptr);
+                }
+                glCullFace(GL_BACK);
+
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[1], 0);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
+
+                glCullFace(GL_FRONT);
+
+                shadowProg.setUnifS("model", nanoMod);
+                nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
+
+                for (unsigned int i = 0; i < gCubeNR; ++i) {
+                    shadowProg.setUnifS("model", cubeModels[i]);
+                    cube.Draw(shadowProg, 1, nullptr, nullptr);
+                }
+                glCullFace(GL_BACK);
             }
-            glCullFace(GL_BACK);
+
+            // Second pass
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+                // Clear the color
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                // Enable gamma correction. This should only be enabled before drawing to the display framebuffer
+                glEnable(GL_FRAMEBUFFER_SRGB);
+
+                // Render the floor
+                floorProg.use();
+                floorProg.setUnif(floorViewID, view);
+                floorProg.setUnif(floorProjID, projection);
+                floorProg.setUnifS("lightSpaceMat", lightSpaceMat);
+                floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
+                floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
+                floorProg.setUnifS("viewPos", cam.Position);
+                // floor spot light
+                floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
+                floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));
+                floorSpotLight.setColors(spotLightColor, 0.2f, 0.3f, 0.5f);
+                // floor directional light
+                floorDirLight.setDir(dirLightDir, glm::mat4(1.0f));
+                floorDirLight.setColors(dirLightColor, 0.2f, 0.3f, 0.1f);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, randomTexture);
+                floor.Draw(floorProg, 1, nullptr, nullptr);
+
+                // use the program and set all uniform values before draw call
+                sProg.use();
+                sProg.setUnif(sViewID, view);
+                sProg.setUnif(sProjID, projection);
+                //sProg.setUnifS("viewPos", cam.Position);
+                sProg.setUnifS("lightSpaceMat", lightSpaceMat);
+                sProg.setUnifS("spotSpaceMat", spotSpaceMat);
+                // Set directional light coordinates and color
+                dirLight.setDir(dirLightDir, dirNormMat);
+                dirLight.setColors(dirLightColor, 0.2f, 0.45f, 0.7f);
+                // Set spotlight colors and position/direction
+                spotLight.setPos(spotPos, view);
+                spotLight.setDir(spotLightDir, dirNormMat);
+                spotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
+                // Update the model and normal matrices for nanosuits
+
+                // Call the model draw function
+                glActiveTexture(GL_TEXTURE4);
+                glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+                glActiveTexture(GL_TEXTURE5);
+                glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+                nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
+
+                // Draw the cubes
+                for (unsigned int i = 0; i < gCubeNR; ++i)
+                    cubeNormMats[i] = glm::mat3(glm::transpose(glm::inverse(view * cubeModels[i])));
+                cube.Draw(sProg, gCubeNR, cubeModels.data(), cubeNormMats.data());
+
+                // Draw the lights
+                lightProg.use();
+                lightProg.setUnif(lightViewID, view);
+                lightProg.setUnif(lightProjID, projection);
+                lightProg.setUnifS("model", lightSphereModel);
+                lightProg.setUnifS("color", spotLightColor);
+                sphere.Draw(lightProg, 1, nullptr, nullptr);
+            }
+
+            // buffer swap and event poll
+            glfwSwapBuffers(window);
+            glfwPollEvents();
         }
-
-        // Second pass
-        {
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-            // Clear the color
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-            // Enable gamma correction. This should only be enabled before drawing to the display framebuffer
-            glEnable(GL_FRAMEBUFFER_SRGB);
-
-            // Render the floor
-            floorProg.use();
-            floorProg.setUnif(floorViewID, view);
-            floorProg.setUnif(floorProjID, projection);
-            floorProg.setUnifS("lightSpaceMat", lightSpaceMat);
-            floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
-            floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
-            floorProg.setUnifS("viewPos", cam.Position);
-            // floor spot light
-            floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
-            floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));
-            floorSpotLight.setColors(spotLightColor, 0.2f, 0.3f, 0.5f);
-            // floor directional light
-            floorDirLight.setDir(dirLightDir, glm::mat4(1.0f));
-            floorDirLight.setColors(dirLightColor, 0.2f, 0.3f, 0.1f);
-            glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
-            glActiveTexture(GL_TEXTURE2);
-            glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, randomTexture);
-            floor.Draw(floorProg, 1, nullptr, nullptr);
-
-            // use the program and set all uniform values before draw call
-            sProg.use();
-            sProg.setUnif(sViewID, view);
-            sProg.setUnif(sProjID, projection);
-            //sProg.setUnifS("viewPos", cam.Position);
-            sProg.setUnifS("lightSpaceMat", lightSpaceMat);
-            sProg.setUnifS("spotSpaceMat", spotSpaceMat);
-            // Set directional light coordinates and color
-            dirLight.setDir(dirLightDir, dirNormMat);
-            dirLight.setColors(dirLightColor, 0.2f, 0.45f, 0.7f);
-            // Set spotlight colors and position/direction
-            spotLight.setPos(spotPos, view);
-            spotLight.setDir(spotLightDir, dirNormMat);
-            spotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
-            // Update the model and normal matrices for nanosuits
-            
-            // Call the model draw function
-            glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
-            glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
-            nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
-
-            // Draw the cubes
-            for (unsigned int i = 0; i < gCubeNR; ++i)
-                cubeNormMats[i] = glm::mat3(glm::transpose(glm::inverse(view * cubeModels[i])));
-            cube.Draw(sProg, gCubeNR, cubeModels.data(), cubeNormMats.data());
-
-            // Draw the lights
-            lightProg.use();
-            lightProg.setUnif(lightViewID, view);
-            lightProg.setUnif(lightProjID, projection);
-            lightProg.setUnifS("model", lightSphereModel);
-            lightProg.setUnifS("color", spotLightColor);
-            sphere.Draw(lightProg, 1, nullptr, nullptr);
-        }
-
-        // buffer swap and event poll
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteTextures(2, shadowMap);
+        glDeleteFramebuffers(1, &shadowFBO);
+        glDeleteTextures(1, &randomTexture);
+        glDeleteBuffers(1, &shadowUBO);
     }
+
+    glfwDestroyWindow(window);
     glfwTerminate();
-    glDeleteFramebuffers(1, &shadowFBO);
-    glDeleteTextures(2, shadowMap);
 
     return 0;
 }

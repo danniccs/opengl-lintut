@@ -39,11 +39,11 @@ in VS_OUT {
 } fs_in;
 
 layout (std140, binding = 0) uniform shadowBlock {
-    vec2 shadowTexelSize;
     vec2 poissonDisk[32];
-    float poissonSpread;
+    vec2 shadowTexelSize;
     int NUM_SEARCH_SAMPLES;
     int NUM_PCF_SAMPLES;
+    float poissonSpread;
 };
 
 out vec4 FragColor;
@@ -212,7 +212,7 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map) {
 
         for (int i = 0; i < 4; i++) {
             vec2 sampleCoords = vec2(projCoords.xy + poissonDisk[i] / poissonSpread);
-            shadow += texture(map, sampleCoords).r < projCoords.z ? 1.0 : 0.0;
+            shadow += texture(map, sampleCoords).r < projCoords.z ? 0.0 : 1.0;
         }
         shadow *= 0.25;
     }

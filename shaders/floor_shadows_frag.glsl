@@ -27,11 +27,11 @@ struct Light {
 };
 
 layout (std140, binding = 0) uniform shadowBlock {
-    vec2 shadowTexelSize;
     vec2 poissonDisk[32];
-    float poissonSpread;
+    vec2 shadowTexelSize;
     int NUM_SEARCH_SAMPLES;
     int NUM_PCF_SAMPLES;
+    float poissonSpread;
 };
 
 uniform sampler2D floorTexture;
@@ -44,15 +44,15 @@ uniform Light dirLight;
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map, vec4 rotation) {
     // Calculate size of blocker search
-    float searchWidth = max(2.0, light.width * projCoords.z / 10.0);
+    float searchWidth = light.width * projCoords.z;
 
     // Calculate average blocker depth
     float blockerDepth = 0.0;
     int numBlockers = 0;
 
-    for (int i = 0; i <= NUM_SEARCH_SAMPLES; ++i) {
-        vec2 offset = vec2(poissonDisk[i].x * rotation.x,
-                           poissonDisk[i].y * rotation.y);
+    for (int i = 0; i < NUM_SEARCH_SAMPLES; ++i) {
+        vec2 offset = vec2(poissonDisk[i].x * rotation.x - poissonDisk[i].y * rotation.y,
+                           poissonDisk[i].x * rotation.y + poissonDisk[i].y * rotation.x);
         float depth = texture(map, projCoords.xy + offset * shadowTexelSize * searchWidth).r;
         if (depth < projCoords.z) {
             blockerDepth += depth;
@@ -82,14 +82,48 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
         // Estimate average blocker depth
         float blockerDepth = estimateBlockerDepth(projCoords, light, map, rotation);
 
+        /*
+        // For Poisson disk inner sampling
+        vec2 innerOffset[4];
+        for (int j = 0; j < 4; j++) {
+            innerOffset[j] = vec2(poissonDisk[j].x * rotation.x - poissonDisk[j].y * rotation.y,
+                                  poissonDisk[j].x * rotation.y + poissonDisk[j].y * rotation.x);
+        }
+        */
+
         // Use PCF to calculate shadow value
         if (blockerDepth > 0.0) {
-            float wPenumbra = max(2.0, (projCoords.z - blockerDepth) * light.width / blockerDepth * 200.0);
-            for (int i = 0; i <= NUM_PCF_SAMPLES; ++i) {
-                vec2 offset = vec2(poissonDisk[i].x * rotation.x,
-                                   poissonDisk[i].y * rotation.y);
-                float depth = texture(map, projCoords.xy + offset * shadowTexelSize * wPenumbra).r;
-                shadow += depth < projCoords.z ? 0.0 : 1.0;
+            float wPenumbra = ((projCoords.z - blockerDepth) * light.width / blockerDepth) * 200.0;
+
+            for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
+                vec2 offset = vec2(poissonDisk[i].x * rotation.x - poissonDisk[i].y * rotation.y,
+                                   poissonDisk[i].x * rotation.y + poissonDisk[i].y * rotation.x);
+                vec2 sampleCenter = projCoords.xy + offset * shadowTexelSize * wPenumbra;
+
+                // With interpolation
+                vec2 sampleFloor = floor(sampleCenter / shadowTexelSize);
+                float t1 = fract(sampleCenter.x / shadowTexelSize.x);
+                float t2 = fract(sampleCenter.y / shadowTexelSize.y);
+
+                float x1 = texture(map, sampleFloor * shadowTexelSize).r;
+                float x2 = texture(map, (sampleFloor + vec2(1.0, 0.0)) * shadowTexelSize).r;
+                float y1 = texture(map, (sampleFloor + vec2(0.0, 1.0)) * shadowTexelSize).r;
+                float y2 = texture(map, (sampleFloor + vec2(1.0, 1.0)) * shadowTexelSize).r;
+
+                x1 = x1 < projCoords.z ? 0.0 : 1.0;
+                x2 = x2 < projCoords.z ? 0.0 : 1.0;
+                y1 = y1 < projCoords.z ? 0.0 : 1.0;
+                y2 = y2 < projCoords.z ? 0.0 : 1.0;
+
+                shadow += mix(mix(x1, x2, t1), mix(y1, y2, t1), t2);
+
+                /*
+                // With Poisson disk sampling (remember to divide final result by 4.0)
+                for (int j = 0; j < 4; ++j) {
+                    float depth = texture(map, sampleCenter + innerOffset[j] * shadowTexelSize).r;
+                    shadow += depth < projCoords.z ? 0.0 : 1.0;
+                }
+                */
             }
             shadow /= NUM_PCF_SAMPLES;
         }
@@ -117,7 +151,9 @@ void main() {
     vec3 viewDir = normalize(viewPos - fs_in.fragPos);
     vec3 halfwayDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
-    vec3 specular = dirLight.specular * spec; // assuming bright white light color
+    vec3 specular = vec3(0.0);
+    // Set specular value to 0 with dirLight to observe shadows more easily.
+    //vec3 specular = dirLight.specular * spec; // assuming bright white light color
 
     float dirShadow = shadowCalculation(fs_in.fragPosLightSpace, ndotl, shadowMap, dirLight);
     vec3 dirColor = ambient + dirShadow * (diffuse + specular);
