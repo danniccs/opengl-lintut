@@ -158,10 +158,12 @@ int main() {
         // Create shadow map generation framebuffer
         unsigned int shadowFBO;
         glGenFramebuffers(1, &shadowFBO);
-        unsigned int shadowMap[2];
-        glGenTextures(2, shadowMap);
+        // Shadow maps.
+        unsigned int shadowMaps[2];
+        glGenTextures(2, shadowMaps);
+        // Configure the shadow maps.
         float borderColor[]{ 1.0f, 1.0f, 1.0f, 1.0f };
-        glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+        glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
                      0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -169,7 +171,7 @@ int main() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
         glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-        glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+        glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT,
                      0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -351,12 +353,13 @@ int main() {
                 glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
                 glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 
-                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[0], 0);
+                glCullFace(GL_FRONT);
+
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[0], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.use();
                 shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
 
-                glCullFace(GL_FRONT);
                 shadowProg.setUnifS("model", nanoMod);
                 nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
 
@@ -364,14 +367,11 @@ int main() {
                     shadowProg.setUnifS("model", cubeModels[i]);
                     cube.Draw(shadowProg, 1, nullptr, nullptr);
                 }
-                glCullFace(GL_BACK);
 
-                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMap[1], 0);
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[1], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
 
-                glCullFace(GL_FRONT);
-
                 shadowProg.setUnifS("model", nanoMod);
                 nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
 
@@ -379,6 +379,7 @@ int main() {
                     shadowProg.setUnifS("model", cubeModels[i]);
                     cube.Draw(shadowProg, 1, nullptr, nullptr);
                 }
+
                 glCullFace(GL_BACK);
             }
 
@@ -407,9 +408,9 @@ int main() {
                 floorDirLight.setDir(dirLightDir, glm::mat4(1.0f));
                 floorDirLight.setColors(dirLightColor, 0.2f, 0.3f, 0.1f);
                 glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
                 glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
                 glActiveTexture(GL_TEXTURE3);
                 glBindTexture(GL_TEXTURE_2D, randomTexture);
                 floor.Draw(floorProg, 1, nullptr, nullptr);
@@ -432,9 +433,9 @@ int main() {
 
                 // Call the model draw function
                 glActiveTexture(GL_TEXTURE4);
-                glBindTexture(GL_TEXTURE_2D, shadowMap[0]);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
                 glActiveTexture(GL_TEXTURE5);
-                glBindTexture(GL_TEXTURE_2D, shadowMap[1]);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
                 nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
 
                 // Draw the cubes
@@ -456,7 +457,7 @@ int main() {
             glfwPollEvents();
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteTextures(2, shadowMap);
+        glDeleteTextures(2, shadowMaps);
         glDeleteFramebuffers(1, &shadowFBO);
         glDeleteTextures(1, &randomTexture);
         glDeleteBuffers(1, &shadowUBO);
