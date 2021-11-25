@@ -138,14 +138,14 @@ int main() {
     // Define lifetime of objects so arrays and buffers are freed before glfwTerminate is called.
     {
         // compile and link the shader programs
-        const Shader sProg((shaderPath/"nano_shadow_vert.glsl").c_str(),
-                           (shaderPath/"nano_shadow_frag.glsl").c_str());
-        const Shader floorProg((shaderPath/"floor_shadows_vert.glsl").c_str(),
-                               (shaderPath/"floor_shadows_frag.glsl").c_str());
-        const Shader lightProg((shaderPath/"light_sphere_vert.glsl").c_str(),
-                               (shaderPath/"light_sphere_frag.glsl").c_str());
-        const Shader shadowProg((shaderPath/"shadow_map_vert.glsl").c_str(),
-                                (shaderPath/"shadow_map_frag.glsl").c_str());
+        const Shader sProg((shaderPath/"sphere.vs").c_str(),
+                           (shaderPath/"sphere.fs").c_str());
+        const Shader floorProg((shaderPath/"floor.vs").c_str(),
+                               (shaderPath/"floor.fs").c_str());
+        const Shader lightProg((shaderPath/"light_sphere.vs").c_str(),
+                               (shaderPath/"light_sphere.fs").c_str());
+        const Shader shadowProg((shaderPath/"shadow_map.vs").c_str(),
+                                (shaderPath/"shadow_map.fs").c_str());
 
         // Get the uniform IDs in the vertex shader
         const int sViewID = sProg.getUnif("view");
@@ -221,6 +221,13 @@ int main() {
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
+        // Load PBR maps.
+        unsigned int albedo = loadTexture((resourcePath / "rusted_iron/rusted_iron2_basecolor.png").c_str());
+        unsigned int normal = loadTexture((resourcePath / "rusted_iron/rusted_iron2_normal.png").c_str());
+        unsigned int metallic = loadTexture((resourcePath / "rusted_iron/rusted_iron2_metallic.png").c_str());
+        unsigned int roughness = loadTexture((resourcePath / "rusted_iron/rusted_iron2_roughness.png").c_str());
+        float ao = 0.3;
+
         // Floor texture and model
         std::vector<std::string> floorTexPaths;
         floorTexPaths.push_back((resourcePath / "wood.png").c_str());
@@ -233,35 +240,10 @@ int main() {
         floorProg.setUnifS("model", floorModel);
         floorProg.setUnifS("floorTexture", 0);
 
-        // Load cube model
-        std::vector<std::string> cubeTexPaths;
-        cubeTexPaths.push_back((resourcePath / "white_square.png").c_str());
-        SimpleMesh cube{ sources::cubeVertices, 36, cubeTexPaths, true};
-        cube.getTextureLocations(sProg);
-        glm::vec3 cubePositions[] = {
-            glm::vec3(1.0f, 0.5f, 0.5f),
-            glm::vec3(4.0f, 0.5f, 0.5f),
-            glm::vec3(-1.0f, 3.5f, 0.5f),
-            glm::vec3(1.0f, 0.5f, -3.0f),
-        };
-        std::vector<glm::mat4> cubeModels(gCubeNR);
-        std::vector<glm::mat3> cubeNormMats(gCubeNR);
-        glm::mat4 model;
-        for (unsigned int i = 0; i < gCubeNR; ++i) {
-            model = glm::translate(glm::mat4(1.0f), cubePositions[i]);
-            model = glm::rotate(model, glm::radians(20.0f * i), glm::vec3(1.0f, 0.0f, 0.0f));
-            cubeModels[i] = model;
-        }
-
-        // Load the nanosuit model
-        fs::path nanoPath((resourcePath / "nanosuit_reflection/nanosuit.obj").c_str());
-        Model nanosuit(nanoPath, true);
-        nanosuit.getTextureLocations(sProg);
-
-        // Load the light spheres
+        // Load the sphere model.
         fs::path spherePath((resourcePath / "sphere.obj").c_str());
         Model sphere(spherePath, false);
-        float wLight = sphere.getApproxWidth();
+        float wSphere = sphere.getApproxWidth();
         float lightSphereScaling = 0.0015f;
 
         // Declare the model, view and projection matrices
@@ -271,34 +253,39 @@ int main() {
         // Set the directional light attributes
         Light dirLight("directionalLight", sProg, true);
         Light floorDirLight("dirLight", floorProg, true);
-
-        // Set spotlight attributes
-        float cutOff = glm::cos(glm::radians(70.0f));
-        constexpr float outerRadians = glm::radians(120.0f);
-        float outerCutOff = glm::cos(outerRadians);
-        Light spotLight("spotLight", sProg, false, wLight * lightSphereScaling,
-                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-        Light floorSpotLight("spotLight", floorProg, false, wLight * lightSphereScaling,
-                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-        // Set the position of the light sphere
-        glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
-        glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
-        lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
-
         glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
         glm::mat4 lightView = glm::lookAt(-dirLightDir,
                                           glm::vec3(0.0f, 0.0f, 0.0f),
                                           glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
 
+        // Set spotlight attributes
+        float cutOff = glm::cos(glm::radians(70.0f));
+        constexpr float outerRadians = glm::radians(120.0f);
+        float outerCutOff = glm::cos(outerRadians);
+        Light spotLight("spotLight", sProg, false, wSphere * lightSphereScaling,
+                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
+        Light floorSpotLight("spotLight", floorProg, false, wSphere * lightSphereScaling,
+                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
+        // Set the position of the light sphere
+        glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
+        glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
+        lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
         float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
         glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
         // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
         //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
 
+        // Set indices for textures.
         sProg.use();
-        sProg.setUnifS("shadowMap", 4);
-        sProg.setUnifS("spotShadowMap", 5);
+        sProg.setUnifS("shadowMap", 0);
+        sProg.setUnifS("spotShadowMap", 1);
+        sProg.setUnifS("albedoMap", 2);
+        sProg.setUnifS("normalMap", 3);
+        sProg.setUnifS("metallicMap", 4);
+        sProg.setUnifS("roughnessMap", 5);
+        sProg.setUnifS("ao", ao);
+
         floorProg.use();
         floorProg.setUnifS("shadowMap", 1);
         floorProg.setUnifS("spotShadowMap", 2);
@@ -343,11 +330,6 @@ int main() {
 
             glm::mat4 lightSpaceMat = lightProjection * lightView;
 
-            glm::mat4 nanoMod = glm::mat4(1.0f);
-            nanoMod = glm::translate(nanoMod, glm::vec3(3.0f, -0.52f, 1.0f));
-            nanoMod = glm::scale(nanoMod, glm::vec3(0.2f));
-            glm::mat3 nanoNorm = glm::mat3(glm::transpose(glm::inverse(view * nanoMod)));
-
             // Do a first pass to obtain the shadow maps
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -360,25 +342,9 @@ int main() {
                 shadowProg.use();
                 shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
 
-                shadowProg.setUnifS("model", nanoMod);
-                nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
-
-                for (unsigned int i = 0; i < gCubeNR; ++i) {
-                    shadowProg.setUnifS("model", cubeModels[i]);
-                    cube.Draw(shadowProg, 1, nullptr, nullptr);
-                }
-
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[1], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
-
-                shadowProg.setUnifS("model", nanoMod);
-                nanosuit.Draw(shadowProg, 1, nullptr, nullptr);
-
-                for (unsigned int i = 0; i < gCubeNR; ++i) {
-                    shadowProg.setUnifS("model", cubeModels[i]);
-                    cube.Draw(shadowProg, 1, nullptr, nullptr);
-                }
 
                 glCullFace(GL_BACK);
             }
@@ -431,19 +397,21 @@ int main() {
                 spotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
                 // Update the model and normal matrices for nanosuits
 
-                // Call the model draw function
-                glActiveTexture(GL_TEXTURE4);
+                // Call the model draw function for the spheres.
+                glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glActiveTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glActiveTexture(GL_TEXTURE4);
+                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
                 glActiveTexture(GL_TEXTURE5);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
-                nanosuit.Draw(sProg, NR_INSTANCES, &nanoMod, &nanoNorm);
 
-                // Draw the cubes
-                for (unsigned int i = 0; i < gCubeNR; ++i)
-                    cubeNormMats[i] = glm::mat3(glm::transpose(glm::inverse(view * cubeModels[i])));
-                cube.Draw(sProg, gCubeNR, cubeModels.data(), cubeNormMats.data());
-
-                // Draw the lights
+                // Draw the lights.
                 lightProg.use();
                 lightProg.setUnif(lightViewID, view);
                 lightProg.setUnif(lightProjID, projection);
