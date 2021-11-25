@@ -67,6 +67,7 @@ void Mesh::getTextureLocations(Shader shader) {
     unsigned int diffuseNr = 0;
     unsigned int specularNr = 0;
     unsigned int reflexNr = 0;
+    unsigned int normalNr = 0;
     unsigned int cubeNr = 0;
     string mat = "material.";
 
@@ -86,6 +87,10 @@ void Mesh::getTextureLocations(Shader shader) {
             else if (name == "reflex") {
                 number = to_string(reflexNr);
                 reflexNr++;
+            }
+            else if (name == "normal") {
+                number = to_string(normalNr);
+                normalNr++;
             }
             else if (name == "cubeMap") {
                 number = to_string(cubeNr);
@@ -122,7 +127,7 @@ void Mesh::setupMesh() {
         cout << "Mesh EBO error: " << hex << err << '\n';
     }
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBOs[POS_NORM_TEX_VB]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[POS_NORM_TEX_TAN_VB]);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
 
     // Location attribute
@@ -134,6 +139,10 @@ void Mesh::setupMesh() {
     // Texture coordinate attribute
     glEnableVertexAttribArray(TEX_LOC);
     glVertexAttribPointer(TEX_LOC, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+    // Tangent attribute
+    glEnableVertexAttribArray(TAN_LOC);
+    glVertexAttribPointer(TAN_LOC, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
+    // Check for errors.
     while ((err = glGetError()) != GL_NO_ERROR) {
         cout << "Mesh VBO error: " << hex << err << '\n';
     }
@@ -160,7 +169,7 @@ void Mesh::setupMesh() {
         cout << "Mesh normal matrix error: " << hex << err << '\n';
     }
 
-    // Colors
+    // Colors if they are supplied.
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[COL_VB]);
     glEnableVertexAttribArray(COL_LOC);
     glVertexAttribPointer(COL_LOC, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);

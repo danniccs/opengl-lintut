@@ -32,7 +32,7 @@ SimpleMesh::SimpleMesh(const float* vertices, unsigned int numVertices,
 
     GLsizei totalSize = static_cast<GLsizei>(posSize + normSize + coordSize);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBOs[POS_NORM_TEX_VB]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[POS_NORM_TEX_TAN_VB]);
     glBufferData(GL_ARRAY_BUFFER, numVertices * static_cast<size_t>(totalSize), vertices, GL_STATIC_DRAW);
 
     // Location attribute

@@ -4,7 +4,7 @@
 #include <string>
 
 // Buffer indices
-const unsigned int POS_NORM_TEX_VB = 0;
+const unsigned int POS_NORM_TEX_TAN_VB = 0;
 const unsigned int MOD_VB = 1;
 const unsigned int NORM_M_VB = 2;
 const unsigned int COL_VB = 3;
@@ -13,9 +13,10 @@ const unsigned int COL_VB = 3;
 const unsigned int POS_LOC = 0;
 const unsigned int NORM_LOC = 1;
 const unsigned int TEX_LOC = 2;
-const unsigned int COL_LOC = 3;
-const unsigned int MOD_LOC = 4;
-const unsigned int NORM_M_LOC = 8;
+const unsigned int TAN_LOC = 3;
+const unsigned int COL_LOC = 4;
+const unsigned int MOD_LOC = 5;
+const unsigned int NORM_M_LOC = 9;
 
 // Material color indices
 const unsigned int AMB = 0;
@@ -26,6 +27,7 @@ struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec2 texCoord;
+	glm::vec3 tangent;
 };
 
 struct Texture {

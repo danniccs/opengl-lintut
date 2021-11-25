@@ -222,10 +222,11 @@ int main() {
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
         // Load PBR maps.
-        unsigned int albedo = loadTexture((resourcePath / "rusted_iron/rusted_iron2_basecolor.png").c_str());
-        unsigned int normal = loadTexture((resourcePath / "rusted_iron/rusted_iron2_normal.png").c_str());
-        unsigned int metallic = loadTexture((resourcePath / "rusted_iron/rusted_iron2_metallic.png").c_str());
-        unsigned int roughness = loadTexture((resourcePath / "rusted_iron/rusted_iron2_roughness.png").c_str());
+        // Rusted iron sphere.
+        unsigned int albedo = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
+        unsigned int normal = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
+        unsigned int metallic = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
+        unsigned int roughness = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
         float ao = 0.3;
 
         // Floor texture and model

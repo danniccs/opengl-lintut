@@ -1,10 +1,15 @@
 #version 430 core
 
 in VS_OUT {
-    vec3 norm;
+    vec3 worldFragPos;
     vec2 texCoords;
-    vec3 viewObjPos;
-    vec4 fragPosLightSpace;
+
+    vec3 frenetFragPos;
+    vec3 frenetViewPos;
+    vec3 frenetLightDir;
+    vec3 frenetSpotPos;
+
+    vec4 fragPosDirSpace;
     vec4 fragPosSpotSpace;
 } fs_in;
 
@@ -37,6 +42,7 @@ uniform Light directionalLight;
 uniform Light spotLight;
 uniform sampler2D shadowMap;
 uniform sampler2D spotShadowMap;
+uniform sampler2D randomAngles;
 
 // PBR textures.
 uniform sampler2D albedoMap;
@@ -53,28 +59,32 @@ out vec4 FragColor;
 
 
 void main() {
-    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, 2.2);
-    vec3 normal = getNormalFromNormalMap();
+    // Load PBR values.
+    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
+    vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
     float metallic = texture(metallicMap, fs_in.texCoords).r;
     float roughness = texture(roughnessMap, fs_in.texCoords).r;
 
+    // Transform the normal to the [-1,1] range.
+    normal = normalize(normal * 2.0 - 1.0);
+
     vec3 result = vec3(0.0);
-    vec3 viewDir = normalize(-fs_in.viewObjPos); // since we are in view coordinates, the camera is always at 0,0,0
+    vec3 viewDir = normalize(fs_in.frenetFragPos - fs_in.frenetViewPos);
 
     // Shadow from directional light
-    vec3 l = -directionalLight.direction;
+    vec3 l = -fs_in.frenetLightDir;
     float ndotl = max(dot(l, normal), 0.0);
-    float dirShadow = shadowCalculation(fs_in.fragPosLightSpace, ndotl, shadowMap);
+    float dirShadow = shadowCalculation(fs_in.fragPosDirSpace, ndotl, shadowMap, directionalLight);
 
     // Shadow from spot light
-    l = normalize(spotLight.position - fs_in.viewObjPos);
+    l = normalize(fs_in.frenetFragPos - fs_in.frenetSpotPos);
     ndotl = max(dot(l, normal), 0.0);
-    float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap);
+    float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap, spotLight);
 
     FragColor = vec4(result, 1.0f);
 }
 
-vec3 calcLight(Light light, vec3 normal, vec3 viewDir, float shadow) {
+vec3 calcLight(Light light, vec3 normal, vec3 viewDir, float shadow, vec3 albedo) {
     vec3 lightVec;
     float theta;
     float intensity;
@@ -82,46 +92,9 @@ vec3 calcLight(Light light, vec3 normal, vec3 viewDir, float shadow) {
     float dist;
     float attenuation;
 
-    if (light.directional == true) {
-        lightVec = normalize(-light.direction);
-        attenuation = 1.0;
-    }
-    else {
-        lightVec = normalize(light.position - fs_in.viewObjPos);
-        // Calculate attenuation
-        dist = length(light.position - fs_in.viewObjPos);
-        attenuation = 1.0 / (light.constant + light.linear * dist + light.quadratic * (dist * dist));
-    }
-
-    // Calculate intensity based on the angle of the light with respect to the object
-    if (light.cutOff >= 0) {
-        theta = dot(lightVec, normalize(-light.direction));
-        intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
-    }
-    else {
-        intensity = 1.0;
-    }
-
     // Calculate ambient lighting
-    vec3 ambient = light.ambient * texture(material.diffuse0, fs_in.texCoords).rgb;
-    ambient *= attenuation * intensity;
-
-    // Calculate diffuse lighting
-    float diff = max(dot(normal, lightVec), 0.0);
-    vec3 diffuse = light.diffuse * diff * texture(material.diffuse0, fs_in.texCoords).rgb;
-    diffuse *= attenuation * intensity;
-
-    // Calculate specular lighting
-    vec3 halfwayDir = normalize(lightVec + viewDir);
-    vec3 reflectDir = reflect(-lightVec, normal); // -lightVec because reflect expects it to point towards the surface
-    float spec = 0.0;
-    if (material.shininess > 0) {
-        spec = pow(max(dot(normal, halfwayDir), 0.0), material.shininess * 4);
-    }
-    vec3 specular = light.specular * spec * texture(material.specular0, fs_in.texCoords).rgb;
-    specular *= attenuation * intensity;
-
-    return ambient + shadow * (diffuse + specular);
+    vec3 ambient = vec3(0.03) * albedo * ao;
+    return ambient;
 }
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map, vec4 rotation) {
@@ -155,7 +128,7 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
     if (projCoords.z <= 1.0) {
 
         // Get random coordinates to rotate poisson disk
-        ivec2 angleTexCoords = ivec2(fs_in.fragPos.x, fs_in.fragPos.y);
+        ivec2 angleTexCoords = ivec2(fs_in.worldFragPos.x, fs_in.worldFragPos.y);
         vec4 rotation = texture(randomAngles, angleTexCoords, 0);
 
         float bias = max(0.02 * (1.0 -  ndotl), 0.005);

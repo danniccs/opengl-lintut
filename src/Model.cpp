@@ -84,7 +84,10 @@ void Model::approximateWidth() {
 
 void Model::loadModel(string path) {
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(path, aiProcessSteps);
+    const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate |
+                                                   aiProcess_FlipUVs |
+                                                   aiProcess_CalcTangentSpace|
+                                                   aiProcessSteps);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
         !scene->mRootNode)
     {
@@ -139,6 +142,11 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
         }
         else
             vertex.texCoord = glm::vec2(0.0f);
+        
+        auxVert.x = mesh->mTangents[i].x;
+        auxVert.y = mesh->mTangents[i].y;
+        auxVert.z = mesh->mTangents[i].z;
+        vertex.tangent = auxVert;
 
         vertices.push_back(vertex);
     }
@@ -162,6 +170,8 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
         vector<Texture> reflexMaps = loadMaterialTextures(material,
             aiTextureType_AMBIENT, "reflex");
         textures.insert(textures.end(), reflexMaps.begin(), reflexMaps.end());
+        vector<Texture> normalMaps = loadMaterialTextures(material,
+            aiTextureType_HEIGHT, "normal");
         myMaterial = loadMaterial(material);
     }
     textures.push_back(cubeTex);
