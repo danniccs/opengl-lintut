@@ -1,14 +1,15 @@
 #version 430 core
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNorm;
-layout(location = 2) in vec2 atexCoords;
+layout(location = 2) in vec2 aTexCoords;
 layout(location = 3) in vec3 aTangent;
 layout(location = 5) in mat4 aModel;
 layout(location = 9) in mat3 aNormMat;
 
+uniform vec3 viewPos;
 uniform vec3 dirLightDir;
 uniform vec3 spotLightPos;
-uniform vec3 viewPos;
+uniform vec3 spotLightDir;
 
 uniform mat4 view;
 uniform mat4 projection;
@@ -23,12 +24,10 @@ out VS_OUT {
     vec3 frenetViewPos;
     vec3 frenetLightDir;
     vec3 frenetSpotPos;
+    vec3 frenetSpotDir;
 
     vec4 fragPosDirSpace;
     vec4 fragPosSpotSpace;
-    
-    // temporary
-    vec3 normal;
 } vs_out;
 
 #define PI 3.1415926538
@@ -37,10 +36,7 @@ void main() {
 	gl_Position = projection * view * aModel * vec4(aPos, 1.0);
 
     vs_out.worldFragPos = vec3(aModel * vec4(aPos, 1.0));
-
-    // Approximate texture coordinates of sphere using normal.
-    // Taken from https://www.mvps.org/directx/articles/spheremap.htm
-	vs_out.texCoords = vec2(asin(aNorm.x)/PI + 0.5, asin(aNorm.y)/PI + 0.5);
+	vs_out.texCoords = aTexCoords;
 
     // Fragment position in the view space of the lights.
     vs_out.fragPosDirSpace = dirSpaceMat * aModel * vec4(aPos, 1.0);
@@ -59,6 +55,5 @@ void main() {
     vs_out.frenetViewPos = TBN * viewPos;
     vs_out.frenetLightDir = TBN * dirLightDir;
     vs_out.frenetSpotPos = TBN * spotLightPos;
-    // temporary
-    vs_out.normal = N;
+    vs_out.frenetSpotDir = TBN * spotLightDir;
 }

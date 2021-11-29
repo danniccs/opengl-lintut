@@ -178,5 +178,7 @@ void main() {
     float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap, spotLight);
     vec3 spotColor = spotShadow * (diffuse + specular);
 
-    FragColor = vec4(dirColor + spotColor, 1.0);
+    const float gamma = 2.2;
+    vec3 result = pow(dirColor + spotColor, vec3(1.0/gamma));
+    FragColor = vec4(result, 1.0);
 }

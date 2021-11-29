@@ -132,8 +132,8 @@ int main() {
     // Enable face culling
     glEnable(GL_CULL_FACE);
     glFrontFace(GL_CCW);
-    // Enable gamma correction
-    glEnable(GL_FRAMEBUFFER_SRGB);
+    // Enable gamma correction (disabled for HDR).
+    //glEnable(GL_FRAMEBUFFER_SRGB);
 
     // Define lifetime of objects so arrays and buffers are freed before glfwTerminate is called.
     {
@@ -227,7 +227,7 @@ int main() {
         unsigned int normalMap = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
         unsigned int metallicMap = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
         unsigned int roughnessMap = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
-        float ao = 0.3;
+        float ao = 0.0f;
 
         // Floor texture and model.
         std::vector<std::string> floorTexPaths;
@@ -242,11 +242,11 @@ int main() {
         floorProg.setUnifS("floorTexture", 0);
 
         // Load the sphere model.
-        fs::path spherePath((resourcePath / "sphere.obj").c_str());
+        fs::path spherePath((resourcePath / "simple_sphere.obj").c_str());
         Model sphere(spherePath, false);
         float wSphere = sphere.getApproxWidth();
-        float lightSphereScaling = 0.0015f;
-        float pbrSphereScaling = 0.002f;
+        float lightSphereScaling = 0.3f;
+        float pbrSphereScaling = 0.4f;
 
         // Declare the model, view and projection matrices
         glm::mat4 view;
@@ -260,6 +260,8 @@ int main() {
                                         glm::vec3(0.0f, 0.0f, 0.0f),
                                         glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 dirProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
+        glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
+        glm::mat4 dirSpaceMat = dirProjection * dirView;
 
         // Set spotlight attributes
         float cutOff = glm::cos(glm::radians(70.0f));
@@ -272,12 +274,18 @@ int main() {
                         1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
         // Set the position of the light sphere
         glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
+        glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
+        glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
         glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
         lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
         float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
         glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
         // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
         //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+        glm::mat4 spotView = glm::lookAt(spotPos,
+                                         spotPos + spotLightDir,
+                                         glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 spotSpaceMat = spotProjection * spotView;
 
         // Set indices for textures.
         sProg.use();
@@ -292,6 +300,7 @@ int main() {
         // Set positions and directions for normal mapping.
         sProg.setUnifS("dirLightDir", dirLightDir);
         sProg.setUnifS("spotLightPos", spotPos);
+        sProg.setUnifS("spotLightDir", spotLightDir);
 
         floorProg.use();
         floorProg.setUnifS("shadowMap", 1);
@@ -324,18 +333,6 @@ int main() {
             // Update the projection matrix
             projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
 
-            // Set the attributes of the spotlight
-            glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
-            glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
-            glm::mat4 spotView = glm::lookAt(spotPos,
-                                             spotPos + spotLightDir,
-                                             glm::vec3(0.0f, 1.0f, 0.0f));
-            glm::mat4 spotSpaceMat = spotProjection * spotView;
-
-            // Set the attributes of the directional light.
-            glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
-            glm::mat4 dirSpaceMat = dirProjection * dirView;
-
             // Set the model matrices for the spheres.
             glm::vec3 spherePos(1.0f, 2.0f, -1.0f);
             glm::mat4 sphereModelMat = glm::translate(glm::mat4(1.0f), spherePos);
@@ -367,14 +364,12 @@ int main() {
                 glCullFace(GL_BACK);
             }
 
-            // Second pass
+            // Second pass.
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-                // Clear the color
+                // Clear the buffers.
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-                // Enable gamma correction. This should only be enabled before drawing to the display framebuffer
-                glEnable(GL_FRAMEBUFFER_SRGB);
 
                 // Render the floor
                 floorProg.use();
@@ -406,13 +401,17 @@ int main() {
                 sProg.setUnif(sProjID, projection);
                 sProg.setUnifS("lightSpaceMat", dirSpaceMat);
                 sProg.setUnifS("spotSpaceMat", spotSpaceMat);
-                // Set directional light coordinates and color
+                /*
+                 * Set directional light coordinates and color.
+                 * With PBR, we no longer use different ambient/diffuse/specular
+                 * values to determine color. Thus, they are all set to 1.
+                */
                 dirLight.setDir(dirLightDir, dirNormMat);
-                dirLight.setColors(dirLightColor, 0.2f, 0.45f, 0.7f);
+                dirLight.setColors(dirLightColor, 1.0f, 1.0f, 1.0f);
                 // Set spotlight colors and position/direction
                 spotLight.setPos(spotPos, view);
                 spotLight.setDir(spotLightDir, dirNormMat);
-                spotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
+                spotLight.setColors(spotLightColor, 1.0f, 1.0f, 1.0f);
 
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);

@@ -139,17 +139,16 @@ Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
         if (mesh->mTextureCoords[0]) {
             vertex.texCoord.x = mesh->mTextureCoords[0][i].x;
             vertex.texCoord.y = mesh->mTextureCoords[0][i].y;
-        }
-        else
-            vertex.texCoord = glm::vec2(0.0f);
-        
-        if (false) {//mesh->mTangents[0]) {
+
             auxVert.x = mesh->mTangents[i].x;
             auxVert.y = mesh->mTangents[i].y;
             auxVert.z = mesh->mTangents[i].z;
             vertex.tangent = auxVert;
         }
-        vertex.tangent = glm::vec3(0.0f);
+        else {
+            vertex.texCoord = glm::vec2(0.0f);
+            vertex.tangent = glm::vec3(0.0f);
+        }
 
         vertices.push_back(vertex);
     }
