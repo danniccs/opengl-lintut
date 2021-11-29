@@ -223,13 +223,13 @@ int main() {
 
         // Load PBR maps.
         // Rusted iron sphere.
-        unsigned int albedo = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
-        unsigned int normal = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
-        unsigned int metallic = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
-        unsigned int roughness = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
+        unsigned int albedoMap = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
+        unsigned int normalMap = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
+        unsigned int metallicMap = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
+        unsigned int roughnessMap = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
         float ao = 0.3;
 
-        // Floor texture and model
+        // Floor texture and model.
         std::vector<std::string> floorTexPaths;
         floorTexPaths.push_back((resourcePath / "wood.png").c_str());
         SimpleMesh floor{ sources::quadVertices, 6, floorTexPaths, true };
@@ -246,19 +246,20 @@ int main() {
         Model sphere(spherePath, false);
         float wSphere = sphere.getApproxWidth();
         float lightSphereScaling = 0.0015f;
+        float pbrSphereScaling = 0.002f;
 
         // Declare the model, view and projection matrices
         glm::mat4 view;
         glm::mat4 projection;
 
         // Set the directional light attributes
-        Light dirLight("directionalLight", sProg, true);
+        Light dirLight("dirLight", sProg, true);
         Light floorDirLight("dirLight", floorProg, true);
         glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
-        glm::mat4 lightView = glm::lookAt(-dirLightDir,
-                                          glm::vec3(0.0f, 0.0f, 0.0f),
-                                          glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
+        glm::mat4 dirView = glm::lookAt(-dirLightDir,
+                                        glm::vec3(0.0f, 0.0f, 0.0f),
+                                        glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 dirProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
 
         // Set spotlight attributes
         float cutOff = glm::cos(glm::radians(70.0f));
@@ -266,6 +267,7 @@ int main() {
         float outerCutOff = glm::cos(outerRadians);
         Light spotLight("spotLight", sProg, false, wSphere * lightSphereScaling,
                         1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
+        // Should be a better way to do this instead of having 2 lights.
         Light floorSpotLight("spotLight", floorProg, false, wSphere * lightSphereScaling,
                         1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
         // Set the position of the light sphere
@@ -281,11 +283,15 @@ int main() {
         sProg.use();
         sProg.setUnifS("shadowMap", 0);
         sProg.setUnifS("spotShadowMap", 1);
-        sProg.setUnifS("albedoMap", 2);
-        sProg.setUnifS("normalMap", 3);
-        sProg.setUnifS("metallicMap", 4);
-        sProg.setUnifS("roughnessMap", 5);
+        sProg.setUnifS("randomAngles", 2);
+        sProg.setUnifS("albedoMap", 3);
+        sProg.setUnifS("normalMap", 4);
+        sProg.setUnifS("metallicMap", 5);
+        sProg.setUnifS("roughnessMap", 6);
         sProg.setUnifS("ao", ao);
+        // Set positions and directions for normal mapping.
+        sProg.setUnifS("dirLightDir", dirLightDir);
+        sProg.setUnifS("spotLightPos", spotPos);
 
         floorProg.use();
         floorProg.setUnifS("shadowMap", 1);
@@ -321,15 +327,20 @@ int main() {
             // Set the attributes of the spotlight
             glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
             glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
-            // Set the attributes of the directional light
-            glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
-
             glm::mat4 spotView = glm::lookAt(spotPos,
                                              spotPos + spotLightDir,
                                              glm::vec3(0.0f, 1.0f, 0.0f));
             glm::mat4 spotSpaceMat = spotProjection * spotView;
 
-            glm::mat4 lightSpaceMat = lightProjection * lightView;
+            // Set the attributes of the directional light.
+            glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
+            glm::mat4 dirSpaceMat = dirProjection * dirView;
+
+            // Set the model matrices for the spheres.
+            glm::vec3 spherePos(1.0f, 2.0f, -1.0f);
+            glm::mat4 sphereModelMat = glm::translate(glm::mat4(1.0f), spherePos);
+            sphereModelMat = glm::scale(sphereModelMat, glm::vec3(pbrSphereScaling));
+            glm::mat3 sphereNormMat = glm::mat3(glm::transpose(glm::inverse(sphereModelMat)));
 
             // Do a first pass to obtain the shadow maps
             {
@@ -341,11 +352,17 @@ int main() {
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[0], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.use();
-                shadowProg.setUnifS("lightSpaceMatrix", lightSpaceMat);
+                shadowProg.setUnifS("lightSpaceMatrix", dirSpaceMat);
+
+                shadowProg.setUnifS("model", sphereModelMat);
+                sphere.Draw(shadowProg, 1, nullptr, nullptr);
 
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[1], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
+
+                shadowProg.setUnifS("model", sphereModelMat);
+                sphere.Draw(shadowProg, 1, nullptr, nullptr);
 
                 glCullFace(GL_BACK);
             }
@@ -363,7 +380,7 @@ int main() {
                 floorProg.use();
                 floorProg.setUnif(floorViewID, view);
                 floorProg.setUnif(floorProjID, projection);
-                floorProg.setUnifS("lightSpaceMat", lightSpaceMat);
+                floorProg.setUnifS("lightSpaceMat", dirSpaceMat);
                 floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
                 floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
                 floorProg.setUnifS("viewPos", cam.Position);
@@ -384,10 +401,10 @@ int main() {
 
                 // use the program and set all uniform values before draw call
                 sProg.use();
+                sProg.setUnifS("viewPos", cam.Position);
                 sProg.setUnif(sViewID, view);
                 sProg.setUnif(sProjID, projection);
-                //sProg.setUnifS("viewPos", cam.Position);
-                sProg.setUnifS("lightSpaceMat", lightSpaceMat);
+                sProg.setUnifS("lightSpaceMat", dirSpaceMat);
                 sProg.setUnifS("spotSpaceMat", spotSpaceMat);
                 // Set directional light coordinates and color
                 dirLight.setDir(dirLightDir, dirNormMat);
@@ -396,21 +413,24 @@ int main() {
                 spotLight.setPos(spotPos, view);
                 spotLight.setDir(spotLightDir, dirNormMat);
                 spotLight.setColors(spotLightColor, 0.2f, 0.45f, 0.7f);
-                // Update the model and normal matrices for nanosuits
 
-                // Call the model draw function for the spheres.
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
                 glActiveTexture(GL_TEXTURE2);
-                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glBindTexture(GL_TEXTURE_2D, randomTexture);
                 glActiveTexture(GL_TEXTURE3);
-                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glBindTexture(GL_TEXTURE_2D, albedoMap);
                 glActiveTexture(GL_TEXTURE4);
-                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glBindTexture(GL_TEXTURE_2D, normalMap);
                 glActiveTexture(GL_TEXTURE5);
-                glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+                glBindTexture(GL_TEXTURE_2D, metallicMap);
+                glActiveTexture(GL_TEXTURE6);
+                glBindTexture(GL_TEXTURE_2D, roughnessMap);
+
+                // Call the model draw function for the spheres.
+                sphere.Draw(sProg, 1, &sphereModelMat, &sphereNormMat);
 
                 // Draw the lights.
                 lightProg.use();

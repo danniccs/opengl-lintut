@@ -26,6 +26,9 @@ out VS_OUT {
 
     vec4 fragPosDirSpace;
     vec4 fragPosSpotSpace;
+    
+    // temporary
+    vec3 normal;
 } vs_out;
 
 #define PI 3.1415926538
@@ -56,4 +59,6 @@ void main() {
     vs_out.frenetViewPos = TBN * viewPos;
     vs_out.frenetLightDir = TBN * dirLightDir;
     vs_out.frenetSpotPos = TBN * spotLightPos;
+    // temporary
+    vs_out.normal = N;
 }
