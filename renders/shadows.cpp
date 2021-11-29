@@ -62,6 +62,7 @@ const float POISSON_SPREAD = 400.0;
 const unsigned int NUM_SEARCH_SAMPLES = 32;
 const unsigned int NUM_PCF_SAMPLES = 48;
 const unsigned int gCubeNR = 4;
+const unsigned int NUM_SPHERES = 3;
 
 namespace toggles {  // Only changed by input processing
     bool bKeyPressed = false;
@@ -222,12 +223,29 @@ int main() {
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
         // Load PBR maps.
+        unsigned int albedoMaps[NUM_SPHERES];
+        unsigned int normalMaps[NUM_SPHERES];
+        unsigned int metallicMaps[NUM_SPHERES];
+        unsigned int roughnessMaps[NUM_SPHERES];
+        unsigned int aoMaps[NUM_SPHERES];
         // Rusted iron sphere.
-        unsigned int albedoMap = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
-        unsigned int normalMap = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
-        unsigned int metallicMap = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
-        unsigned int roughnessMap = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
-        float ao = 0.0f;
+        albedoMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
+        normalMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
+        metallicMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_metallic.png").c_str());
+        roughnessMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_roughness.png").c_str());
+        aoMaps[0] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_ao.png").c_str());
+        // Streaky metal sphere.
+        albedoMaps[1] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_albedo.png").c_str());
+        normalMaps[1] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_normal-dx.png").c_str());
+        metallicMaps[1] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_metallic.png").c_str());
+        roughnessMaps[1] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_roughness.png").c_str());
+        aoMaps[1] = loadTexture((resourcePath / "streaky_metal/streaky-metal1_ao.png").c_str());
+        // Worn metal sphere.
+        albedoMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_albedo.png").c_str());
+        normalMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Normal-dx.png").c_str());
+        metallicMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Metallic.png").c_str());
+        roughnessMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Roughness.png").c_str());
+        aoMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_ao.png").c_str());
 
         // Floor texture and model.
         std::vector<std::string> floorTexPaths;
@@ -247,6 +265,20 @@ int main() {
         float wSphere = sphere.getApproxWidth();
         float lightSphereScaling = 0.3f;
         float pbrSphereScaling = 0.4f;
+        // Set sphere positions.
+        glm::vec3 spherePos[NUM_SPHERES] {
+            glm::vec3(1.0f, 2.0f, -1.0f),
+            glm::vec3(2.0f, 2.0f, -1.0f),
+            glm::vec3(0.0f, 2.0f, -1.0f)
+        };
+        glm::mat4 sphereModelMats[NUM_SPHERES];
+        glm::mat3 sphereNormMats[NUM_SPHERES];
+        // Set the model matrices for the spheres.
+        for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+            sphereModelMats[i] = glm::translate(glm::mat4(1.0f), spherePos[i]);
+            sphereModelMats[i] = glm::scale(sphereModelMats[i], glm::vec3(pbrSphereScaling));
+            sphereNormMats[i] = glm::mat3(glm::transpose(glm::inverse(sphereModelMats[i])));
+        }
 
         // Declare the model, view and projection matrices
         glm::mat4 view;
@@ -274,7 +306,7 @@ int main() {
                         1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
         // Set the position of the light sphere
         glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
-        glm::vec3 spotLightDir(1.0f, -1.0f, -1.0f);
+        glm::vec3 spotLightDir(0.0f, -1.0f, -1.0f);
         glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
         glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
         lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
@@ -296,7 +328,7 @@ int main() {
         sProg.setUnifS("normalMap", 4);
         sProg.setUnifS("metallicMap", 5);
         sProg.setUnifS("roughnessMap", 6);
-        sProg.setUnifS("ao", ao);
+        sProg.setUnifS("aoMap", 7);
         // Set positions and directions for normal mapping.
         sProg.setUnifS("dirLightDir", dirLightDir);
         sProg.setUnifS("spotLightPos", spotPos);
@@ -333,12 +365,6 @@ int main() {
             // Update the projection matrix
             projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f, 0.1f, 100.0f);
 
-            // Set the model matrices for the spheres.
-            glm::vec3 spherePos(1.0f, 2.0f, -1.0f);
-            glm::mat4 sphereModelMat = glm::translate(glm::mat4(1.0f), spherePos);
-            sphereModelMat = glm::scale(sphereModelMat, glm::vec3(pbrSphereScaling));
-            glm::mat3 sphereNormMat = glm::mat3(glm::transpose(glm::inverse(sphereModelMat)));
-
             // Do a first pass to obtain the shadow maps
             {
                 glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -351,15 +377,19 @@ int main() {
                 shadowProg.use();
                 shadowProg.setUnifS("lightSpaceMatrix", dirSpaceMat);
 
-                shadowProg.setUnifS("model", sphereModelMat);
-                sphere.Draw(shadowProg, 1, nullptr, nullptr);
+                for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+                    shadowProg.setUnifS("model", sphereModelMats[i]);
+                    sphere.Draw(shadowProg, 1, nullptr, nullptr);
+                }
 
                 glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMaps[1], 0);
                 glClear(GL_DEPTH_BUFFER_BIT);
                 shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
 
-                shadowProg.setUnifS("model", sphereModelMat);
-                sphere.Draw(shadowProg, 1, nullptr, nullptr);
+                for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+                    shadowProg.setUnifS("model", sphereModelMats[i]);
+                    sphere.Draw(shadowProg, 1, nullptr, nullptr);
+                }
 
                 glCullFace(GL_BACK);
             }
@@ -419,17 +449,22 @@ int main() {
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
                 glActiveTexture(GL_TEXTURE2);
                 glBindTexture(GL_TEXTURE_2D, randomTexture);
-                glActiveTexture(GL_TEXTURE3);
-                glBindTexture(GL_TEXTURE_2D, albedoMap);
-                glActiveTexture(GL_TEXTURE4);
-                glBindTexture(GL_TEXTURE_2D, normalMap);
-                glActiveTexture(GL_TEXTURE5);
-                glBindTexture(GL_TEXTURE_2D, metallicMap);
-                glActiveTexture(GL_TEXTURE6);
-                glBindTexture(GL_TEXTURE_2D, roughnessMap);
 
-                // Call the model draw function for the spheres.
-                sphere.Draw(sProg, 1, &sphereModelMat, &sphereNormMat);
+                for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+                    glActiveTexture(GL_TEXTURE3);
+                    glBindTexture(GL_TEXTURE_2D, albedoMaps[i]);
+                    glActiveTexture(GL_TEXTURE4);
+                    glBindTexture(GL_TEXTURE_2D, normalMaps[i]);
+                    glActiveTexture(GL_TEXTURE5);
+                    glBindTexture(GL_TEXTURE_2D, metallicMaps[i]);
+                    glActiveTexture(GL_TEXTURE6);
+                    glBindTexture(GL_TEXTURE_2D, roughnessMaps[i]);
+                    glActiveTexture(GL_TEXTURE7);
+                    glBindTexture(GL_TEXTURE_2D, aoMaps[i]);
+
+                    // Call the model draw function for the spheres.
+                    sphere.Draw(shadowProg, 1, &sphereModelMats[i], &sphereNormMats[i]);
+                }
 
                 // Draw the lights.
                 lightProg.use();

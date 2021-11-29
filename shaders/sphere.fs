@@ -50,7 +50,7 @@ uniform sampler2D albedoMap;
 uniform sampler2D normalMap;
 uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
-uniform float ao;
+uniform sampler2D aoMap;
 
 #define PI 3.1415926538
 
@@ -241,6 +241,7 @@ void main() {
     vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
     float metallic = texture(metallicMap, fs_in.texCoords).r;
     float roughness = texture(roughnessMap, fs_in.texCoords).r;
+    float ao = texture(aoMap, fs_in.texCoords).r;
 
     // Transform the normal to the [-1,1] range.
     normal = normalize(normal * 2.0 - 1.0);
