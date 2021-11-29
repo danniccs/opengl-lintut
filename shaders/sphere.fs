@@ -54,94 +54,8 @@ uniform float ao;
 
 #define PI 3.1415926538
 
-vec3 calcLight(Light light, vec3 frenetPosDir, vec3 n, vec3 v, vec3 l, float shadow, vec3 F0,
-               vec3 albedo, float metallic, float roughness, float ndotl, float ndotv);
-float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light);
-
-// PBR functions.
-float GGXNDF(vec3 n, vec3 m, float roughness);
-float lambdaGGX(float a2);
-float geometrySmith(float ndotv, float ndotl, float roughness);
-vec3 fresnelSchlick(float cosTheta, vec3 F0);
-
 out vec4 FragColor;
 
-
-void main() {
-    // Load PBR values.
-    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
-    vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
-    float metallic = texture(metallicMap, fs_in.texCoords).r;
-    float roughness = texture(roughnessMap, fs_in.texCoords).r;
-
-    // Transform the normal to the [-1,1] range.
-    normal = normalize(normal * 2.0 - 1.0);
-
-    vec3 v = normalize(fs_in.frenetFragPos - fs_in.frenetViewPos);
-    float ndotv = max(dot(normal,v), 0.0);
-
-    vec3 F0 = vec3(0.04);
-    F0 = mix(F0, albedo, metallic);
-
-    vec3 Lo = vec3(0.0);
-
-    // Lo from directional light
-    vec3 l = normalize(-fs_in.frenetLightDir);
-    float ndotl = max(dot(l, normal), 0.0);
-    float dirShadow = shadowCalculation(fs_in.fragPosDirSpace, ndotl, shadowMap, dirLight);
-    Lo += calcLight(dirLight, fs_in.frenetLightDir, normal, v, l, dirShadow, F0, albedo,
-                    metallic, roughness, ndotl, ndotv);
-
-    // Lo from spot light
-    l = normalize(fs_in.frenetFragPos - fs_in.frenetSpotPos);
-    ndotl = max(dot(l, normal), 0.0);
-    float spotShadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap, spotLight);
-    Lo += calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, spotShadow, F0, albedo,
-                    metallic, roughness, ndotl, ndotv);
-
-    vec3 ambient = vec3(0.03) * albedo * ao;
-    vec3 color = ambient + Lo;
-
-    // HDR Tonemapping
-    color = color / (color + vec3(1.0));
-    // Gamma correction
-    const float gamma = 2.2;
-    color = pow(color, vec3(1.0 / gamma));
-
-    FragColor = vec4(color, 1.0f);
-}
-
-vec3 calcLight(Light light, vec3 frenetPosDir, vec3 n, vec3 v, vec3 l, float shadow, vec3 F0,
-               vec3 albedo, float metallic, float roughness, float ndotl, float ndotv) {
-    // Calculate the color of light at the fragment.
-    float intensity = 1.0;
-    float attenuation = 1.0;
-    if (!light.directional) {
-        float theta = dot(l, normalize(-frenetPosDir));
-        float epsilon = light.cutOff - light.outerCutOff;
-        intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
-        float d = length(light.position - fs_in.worldFragPos);
-        attenuation = 1.0 / (d * d);
-    }
-    vec3 cLight = attenuation * intensity * light.diffuse;
-
-    vec3 h = normalize(v + l);
-    float D = GGXNDF(n, h, roughness);
-    float G = geometrySmith(ndotv, ndotl, roughness);
-    vec3 F = fresnelSchlick(max(dot(h,v), 0.0), F0);
-
-    vec3 numerator = D * G * F;
-    // Add 0.0001 to the denominator to avoid dividing by 0.
-    float denominator = 4 * ndotv * ndotl + 0.0001;
-    vec3 specular = numerator / denominator;
-
-    vec3 kD = vec3(1.0) - F;
-    // Multiply kD by the inverse of metalness so metals do not have
-    // subsurface scattering.
-    kD *= 1.0 - metallic;
-
-    return shadow * (kD * albedo + specular * PI) * cLight * ndotl;
-}
 
 // Calculate GGX/Trowbridge-Reitz NDF.
 float GGXNDF(vec3 n, vec3 m, float roughness)
@@ -187,6 +101,61 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+
+// Alternative Geometry functions from learnopengl.com
+float geometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+
+float geometrySmithAlt(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = geometrySchlickGGX(NdotV, roughness);
+    float ggx1 = geometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, float shadow, vec3 F0,
+               vec3 albedo, float metallic, float roughness, float ndotl, float ndotv) {
+    // Calculate the color of light at the fragment.
+    float intensity = 1.0;
+    float attenuation = 1.0;
+    if (!light.directional) {
+        float theta = dot(l, normalize(-frenetDir));
+        float epsilon = light.cutOff - light.outerCutOff;
+        intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
+        float d = length(light.position - fs_in.worldFragPos);
+        attenuation = 1.0 / (d * d);
+    }
+    vec3 cLight = light.diffuse * attenuation * intensity;
+
+    vec3 h = normalize(v + l);
+    float D = GGXNDF(n, h, roughness);
+    float G = geometrySmithAlt(n, v, l, roughness);
+    vec3 F = fresnelSchlick(max(dot(h,v), 0.0), F0);
+
+    vec3 numerator = D * G * F;
+    // Add 0.0001 to the denominator to avoid dividing by 0.
+    float denominator = 4 * ndotv * ndotl + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    vec3 kD = vec3(1.0) - F;
+    // Multiply kD by the inverse of metalness so metals do not have
+    // subsurface scattering.
+    kD *= 1.0 - metallic;
+
+    return shadow * (kD * albedo + specular * PI) * cLight * ndotl;
+}
+
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map, vec4 rotation) {
     // Calculate size of blocker search.
@@ -263,4 +232,49 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
         shadow = 1.0;
 
     return shadow;
+}
+
+
+void main() {
+    // Load PBR values.
+    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
+    vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
+    float metallic = texture(metallicMap, fs_in.texCoords).r;
+    float roughness = texture(roughnessMap, fs_in.texCoords).r;
+
+    // Transform the normal to the [-1,1] range.
+    normal = normalize(normal * 2.0 - 1.0);
+
+    vec3 v = normalize(fs_in.frenetViewPos - fs_in.frenetFragPos);
+    float ndotv = max(dot(normal,v), 0.0);
+
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metallic);
+
+    vec3 Lo = vec3(0.0);
+
+    // Lo from directional light
+    vec3 l = normalize(-fs_in.frenetLightDir);
+    float ndotl = max(dot(l, normal), 0.0);
+    float shadow = shadowCalculation(fs_in.fragPosDirSpace, ndotl, shadowMap, dirLight);
+    Lo += calcLight(dirLight, fs_in.frenetLightDir, normal, v, l, shadow, F0, albedo,
+                    metallic, roughness, ndotl, ndotv);
+
+    // Lo from spot light
+    l = normalize(fs_in.frenetSpotPos - fs_in.frenetFragPos);
+    ndotl = max(dot(l, normal), 0.0);
+    shadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap, spotLight);
+    Lo += calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, shadow, F0, albedo,
+                    metallic, roughness, ndotl, ndotv);
+
+    vec3 ambient = vec3(0.03) * albedo * ao;
+    vec3 color = ambient + Lo;
+
+    // HDR Tonemapping
+    color = color / (color + vec3(1.0));
+    // Gamma correction
+    const float gamma = 2.2;
+    color = pow(color, vec3(1.0 / gamma));
+
+    FragColor = vec4(color, 1.0f);
 }
