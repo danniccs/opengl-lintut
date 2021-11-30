@@ -42,3 +42,10 @@ gltut
 
 # Visual Code directory
 /.vscode/*
+
+# PBR directories
+/resources/metal_slats/*
+/resources/streaky_metal/*
+/resources/worn-metal/*
+/resources/sharp-boulder/*
+/resources/rusted_iron/*

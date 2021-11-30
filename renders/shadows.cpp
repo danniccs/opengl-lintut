@@ -269,9 +269,9 @@ int main() {
         float pbrSphereScaling = 0.4f;
         // Set sphere positions.
         glm::vec3 spherePos[NUM_SPHERES] {
+            glm::vec3(0.0f, 2.0f, -1.0f),
             glm::vec3(1.0f, 2.0f, -1.0f),
             glm::vec3(2.0f, 2.0f, -1.0f),
-            glm::vec3(0.0f, 2.0f, -1.0f)
         };
         glm::mat4 sphereModelMats[NUM_SPHERES];
         glm::mat3 sphereNormMats[NUM_SPHERES];

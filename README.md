@@ -9,6 +9,12 @@ Requires:
 
 GLM is also used, but is included in the repository.
 
+To obtain the textures used, please visit [freepbr.com](https://freepbr.com/).
+The textures are in the "Metals" category:
+- Streaky Metal 1
+- Rusted Iron Alt 2
+- Worn Metal 4
+
 ### Getting Started
 To compile and run:
 ```console
