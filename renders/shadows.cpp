@@ -228,6 +228,7 @@ int main() {
         unsigned int metallicMaps[NUM_SPHERES];
         unsigned int roughnessMaps[NUM_SPHERES];
         unsigned int aoMaps[NUM_SPHERES];
+        unsigned int heightMaps[NUM_SPHERES];
         // Rusted iron sphere.
         albedoMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_basecolor.png").c_str());
         normalMaps[0] = loadTexture((resourcePath / "rusted_iron/rustediron2_normal.png").c_str());
@@ -246,6 +247,7 @@ int main() {
         metallicMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Metallic.png").c_str());
         roughnessMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Roughness.png").c_str());
         aoMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_ao.png").c_str());
+        heightMaps[2] = loadTexture((resourcePath / "worn-metal/worn_metal4_Height.png").c_str());
 
         // Floor texture and model.
         std::vector<std::string> floorTexPaths;
@@ -329,6 +331,7 @@ int main() {
         sProg.setUnifS("metallicMap", 5);
         sProg.setUnifS("roughnessMap", 6);
         sProg.setUnifS("aoMap", 7);
+        sProg.setUnifS("heightMap", 8);
         // Set positions and directions for normal mapping.
         sProg.setUnifS("dirLightDir", dirLightDir);
         sProg.setUnifS("spotLightPos", spotPos);
@@ -461,6 +464,11 @@ int main() {
                     glBindTexture(GL_TEXTURE_2D, roughnessMaps[i]);
                     glActiveTexture(GL_TEXTURE7);
                     glBindTexture(GL_TEXTURE_2D, aoMaps[i]);
+
+                    if (i == 2) {
+                        glActiveTexture(GL_TEXTURE8);
+                        glBindTexture(GL_TEXTURE_2D, heightMaps[i]);
+                    }
 
                     // Call the model draw function for the spheres.
                     sphere.Draw(shadowProg, 1, &sphereModelMats[i], &sphereNormMats[i]);

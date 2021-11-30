@@ -52,6 +52,10 @@ uniform sampler2D metallicMap;
 uniform sampler2D roughnessMap;
 uniform sampler2D aoMap;
 
+// For Parallax Occlusion Mapping
+uniform float heightScale;
+uniform sampler2D heightMap;
+
 #define PI 3.1415926538
 
 out vec4 FragColor;
@@ -102,7 +106,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-// Alternative Geometry functions from learnopengl.com
+// Alternative Geometry functions
 float geometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);
@@ -113,7 +117,6 @@ float geometrySchlickGGX(float NdotV, float roughness)
 
     return nom / denom;
 }
-
 float geometrySmithAlt(vec3 N, vec3 V, vec3 L, float roughness)
 {
     float NdotV = max(dot(N, V), 0.0);
@@ -140,7 +143,7 @@ vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, float shadow
 
     vec3 h = normalize(v + l);
     float D = GGXNDF(n, h, roughness);
-    float G = geometrySmithAlt(n, v, l, roughness);
+    float G = geometrySmith(ndotv, ndotl, roughness);
     vec3 F = fresnelSchlick(max(dot(h,v), 0.0), F0);
 
     vec3 numerator = D * G * F;
@@ -234,8 +237,43 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
     return shadow;
 }
 
+vec2 parallaxOcclusion(vec2 texCoords, vec3 v) {
+    const float minLayers = 8.0;
+    const float maxLayers = 32.0;
+    const float numLayers = mix(maxLayers, minLayers, max(dot(vec3(0.0, 0.0, 1.0), v), 0.0));
+    const float layerHeight = 1.0 / numLayers;
+    float currentLayerHeight = numLayers;
+
+    vec2 P = v.xy * heightScale;
+    vec2 deltaUV = P / numLayers;
+
+    vec2 currentUV = texCoords;
+    float currentHeight = texture(heightMap, currentUV).r;
+
+    while (currentLayerHeight > currentHeight) {
+        currentUV += deltaUV;
+        currentHeight = texture(heightMap, currentUV).r;
+        currentLayerHeight -= layerHeight;
+    }
+
+    vec2 prevUV = currentUV - deltaUV;
+    
+    // Get height differences before and after getting final UV.
+    float afterHeight = currentHeight - currentLayerHeight;
+    float beforeHeight = texture(heightMap, prevUV).r - (currentHeight + layerHeight);
+
+    // Interpolate the texture coordinates.
+    float t = afterHeight / (afterHeight - beforeHeight);
+    vec2 finalUV = mix(prevUV, currentUV, t);
+
+    return finalUV;
+}
+
 
 void main() {
+    vec3 v = normalize(fs_in.frenetViewPos - fs_in.frenetFragPos);
+    vec2 texCoords = parallaxOcclusion(fs_in.texCoords, v);
+
     // Load PBR values.
     vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
     vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
@@ -246,7 +284,6 @@ void main() {
     // Transform the normal to the [-1,1] range.
     normal = normalize(normal * 2.0 - 1.0);
 
-    vec3 v = normalize(fs_in.frenetViewPos - fs_in.frenetFragPos);
     float ndotv = max(dot(normal,v), 0.0);
 
     vec3 F0 = vec3(0.04);
