@@ -28,11 +28,6 @@ namespace fs = std::filesystem;
 fs::path shaderPath(fs::current_path() / "shaders");
 fs::path resourcePath(fs::current_path() / "resources");
 
-// Set number of point lights and instances
-const unsigned int NR_POINT_LIGHTS = 4;
-const unsigned int NR_SPOT_LIGHTS = 1;
-const unsigned int NR_INSTANCES = 1;
-
 const glm::vec3 sunYellow(0.9765f, 0.8431f, 0.1098f);
 
 // Set the initial camera positions

@@ -274,12 +274,14 @@ void main() {
     vec3 v = normalize(fs_in.frenetViewPos - fs_in.frenetFragPos);
     vec2 texCoords = parallaxOcclusion(fs_in.texCoords, v);
 
+    const float gamma = 2.2;
+
     // Load PBR values.
-    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(2.2));
+    vec3 albedo = pow(texture(albedoMap, fs_in.texCoords).rgb, vec3(gamma));
     vec3 normal = texture(normalMap, fs_in.texCoords).rgb;
     float metallic = texture(metallicMap, fs_in.texCoords).r;
     float roughness = texture(roughnessMap, fs_in.texCoords).r;
-    float ao = texture(aoMap, fs_in.texCoords).r;
+    float ao = pow(texture(aoMap, fs_in.texCoords).r, gamma);
 
     // Transform the normal to the [-1,1] range.
     normal = normalize(normal * 2.0 - 1.0);
@@ -311,7 +313,6 @@ void main() {
     // HDR Tonemapping
     color = color / (color + vec3(1.0));
     // Gamma correction
-    const float gamma = 2.2;
     color = pow(color, vec3(1.0 / gamma));
 
     FragColor = vec4(color, 1.0f);
