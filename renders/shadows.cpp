@@ -257,7 +257,7 @@ int main() {
         floorProg.setUnifS("floorTexture", 0);
 
         // Load the sphere model.
-        fs::path spherePath((resourcePath / "simple_sphere.obj").c_str());
+        fs::path spherePath((resourcePath / "sphere.obj").c_str());
         Model sphere(spherePath, false);
         float wSphere = sphere.getApproxWidth();
         float lightSphereScaling = 0.3f;
@@ -266,7 +266,7 @@ int main() {
         glm::vec3 spherePos[NUM_SPHERES] {
             glm::vec3(0.0f, 2.0f, -1.0f),
             glm::vec3(1.0f, 2.0f, -1.0f),
-            glm::vec3(2.0f, 2.0f, -1.0f),
+            glm::vec3(1.0f, 1.0f, -1.0f),
         };
         glm::mat4 sphereModelMats[NUM_SPHERES];
         glm::mat3 sphereNormMats[NUM_SPHERES];

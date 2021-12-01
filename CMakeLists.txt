@@ -42,6 +42,7 @@ target_compile_options(gltut
         -pedantic
         -Wall
         -Wextra
+        -Wno-unused-parameter
         -O3
 )
 
