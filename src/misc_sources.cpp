@@ -236,7 +236,7 @@ const glm::vec3 sources::grassCoordinates[5] {
     glm::vec3(1.0f, 0.0f, -0.6f),
 };
 
-const glm::vec2 sources::poissonDisc[32] {
+const glm::vec2 sources::poissonDisk[32] {
     glm::vec2(0.282571,   0.023957),
     glm::vec2(0.792657,   0.945738),
     glm::vec2(0.922361,   0.411756),

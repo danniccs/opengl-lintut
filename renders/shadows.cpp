@@ -209,7 +209,8 @@ int main() {
         glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
         size_t UBOSize = 32*sizeof(glm::vec4) + sizeof(glm::vec2) + 3 * sizeof(float);
         glBufferData(GL_UNIFORM_BUFFER, UBOSize, NULL, GL_STATIC_DRAW);
-        glBufferSubData(GL_UNIFORM_BUFFER, 0, 32*sizeof(glm::vec4), sources::poissonDisc);
+        for (unsigned int i = 0; i < 32; ++i)
+            glBufferSubData(GL_UNIFORM_BUFFER, i*sizeof(glm::vec4), sizeof(glm::vec2), &sources::poissonDisk[i]);
         glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4), sizeof(glm::vec2), &shadowTexelSize);
         glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4) + sizeof(glm::vec2), 4, &NUM_SEARCH_SAMPLES);
         glBufferSubData(GL_UNIFORM_BUFFER, 32*sizeof(glm::vec4) + sizeof(glm::vec2) + 4, 4, &NUM_PCF_SAMPLES);
@@ -304,7 +305,7 @@ int main() {
         // Set the position of the light sphere
         glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
         glm::vec3 spotLightDir(0.0f, -1.0f, -1.0f);
-        glm::vec3 spotLightColor(0.996f, 0.86f, 0.112f);
+        glm::vec3 spotLightColor(0.5f, 0.5f, 0.5f);
         glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
         lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
         float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
@@ -335,6 +336,7 @@ int main() {
         floorProg.use();
         floorProg.setUnifS("shadowMap", 1);
         floorProg.setUnifS("spotShadowMap", 2);
+        floorProg.setUnifS("randomAngles", 3);
 
         while (!glfwWindowShouldClose(window)) {
 
