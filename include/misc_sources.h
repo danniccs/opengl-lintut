@@ -42,7 +42,7 @@ namespace sources {
 
     extern const glm::vec3 grassCoordinates[5];
 
-    extern const glm::vec2 poissonDisc[32];
+    extern const glm::vec2 poissonDisk[32];
 }
 
 #endif
