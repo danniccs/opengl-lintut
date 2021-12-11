@@ -1,7 +1,6 @@
 target_sources(srclib
     PRIVATE
         glad.c
-        Light.cpp
         Mesh.cpp
         misc_sources.cpp
         Model.cpp

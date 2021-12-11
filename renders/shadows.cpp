@@ -134,14 +134,14 @@ int main() {
     // Define lifetime of objects so arrays and buffers are freed before glfwTerminate is called.
     {
         // compile and link the shader programs
-        const Shader sProg((shaderPath/"sphere.vs").c_str(),
-                           (shaderPath/"sphere.fs").c_str());
-        const Shader floorProg((shaderPath/"floor.vs").c_str(),
-                               (shaderPath/"floor.fs").c_str());
-        const Shader lightProg((shaderPath/"light_sphere.vs").c_str(),
-                               (shaderPath/"light_sphere.fs").c_str());
-        const Shader shadowProg((shaderPath/"shadow_map.vs").c_str(),
-                                (shaderPath/"shadow_map.fs").c_str());
+        Shader sProg((shaderPath/"sphere.vs").c_str(),
+                     (shaderPath/"sphere.fs").c_str());
+        Shader floorProg((shaderPath/"floor.vs").c_str(),
+                         (shaderPath/"floor.fs").c_str());
+        Shader lightProg((shaderPath/"light_sphere.vs").c_str(),
+                         (shaderPath/"light_sphere.fs").c_str());
+        Shader shadowProg((shaderPath/"shadow_map.vs").c_str(),
+                          (shaderPath/"shadow_map.fs").c_str());
 
         // Get the uniform IDs in the vertex shader
         const int sViewID = sProg.getUnif("view");
@@ -283,39 +283,40 @@ int main() {
         glm::mat4 projection;
 
         // Set the directional light attributes
-        Light dirLight("dirLight", sProg, true);
-        Light floorDirLight("dirLight", floorProg, true);
-        glm::vec3 dirLightDir{ 3.0f, -4.0f, 0.0f };
-        glm::mat4 dirView = glm::lookAt(-dirLightDir,
+        Light dirLight { "dirLight", true };
+        dirLight.cLight = glm::vec3{ 0.5f, 0.5f, 0.5f };
+        dirLight.direction = glm::vec3{ 3.0f, -4.0f, 0.0f};
+        glm::mat4 dirView = glm::lookAt(-dirLight.direction,
                                         glm::vec3(0.0f, 0.0f, 0.0f),
                                         glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 dirProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
-        glm::vec3 dirLightColor{ 0.5f, 0.5f, 0.5f };
         glm::mat4 dirSpaceMat = dirProjection * dirView;
 
         // Set spotlight attributes
         float cutOff = glm::cos(glm::radians(70.0f));
         constexpr float outerRadians = glm::radians(120.0f);
         float outerCutOff = glm::cos(outerRadians);
-        Light spotLight("spotLight", sProg, false, wSphere * lightSphereScaling,
-                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-        // Should be a better way to do this instead of having 2 lights.
-        Light floorSpotLight("spotLight", floorProg, false, wSphere * lightSphereScaling,
-                        1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
-        // Set the position of the light sphere
-        glm::vec3 spotPos{ 1.0f, 3.0f, 2.0f };
-        glm::vec3 spotLightDir(0.0f, -1.0f, -1.0f);
-        glm::vec3 spotLightColor(0.5f, 0.5f, 0.5f);
-        glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotPos);
+        Light spotLight{ "spotLight", false, wSphere * lightSphereScaling,
+                         1.0f, 0.14f, 0.07f, cutOff, outerCutOff };
+        spotLight.position = glm::vec3(1.0f, 3.0f, 2.0f);
+        spotLight.direction = glm::vec3(0.0f, -1.0f, -1.0f);
+        spotLight.cLight = glm::vec3(1.0f, 1.0f, 1.0f);
+        glm::mat4 lightSphereModel = glm::translate(glm::mat4(1.0f), spotLight.position);
         lightSphereModel = glm::scale(lightSphereModel, glm::vec3(lightSphereScaling));
         float aspect = static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
         glm::mat4 spotProjection = glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
         // Could also use an orthogonal projection for the spotlight (not very realistic in most cases)
         //glm::mat4 spotProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
-        glm::mat4 spotView = glm::lookAt(spotPos,
-                                         spotPos + spotLightDir,
+        glm::mat4 spotView = glm::lookAt(spotLight.position,
+                                         spotLight.position + spotLight.direction,
                                          glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 spotSpaceMat = spotProjection * spotView;
+
+        // Set light uniforms in shaders.
+        sProg.setLight(spotLight);
+        sProg.setLight(dirLight);
+        floorProg.setLight(spotLight);
+        floorProg.setLight(dirLight);
 
         // Set indices for textures.
         sProg.use();
@@ -329,9 +330,9 @@ int main() {
         sProg.setUnifS("aoMap", 7);
         sProg.setUnifS("heightMap", 8);
         // Set positions and directions for normal mapping.
-        sProg.setUnifS("dirLightDir", dirLightDir);
-        sProg.setUnifS("spotLightPos", spotPos);
-        sProg.setUnifS("spotLightDir", spotLightDir);
+        sProg.setUnifS("dirLightDir", dirLight.direction);
+        sProg.setUnifS("spotLightPos", spotLight.position);
+        sProg.setUnifS("spotLightDir", spotLight.direction);
 
         floorProg.use();
         floorProg.setUnifS("shadowMap", 1);
@@ -410,12 +411,10 @@ int main() {
                 floorProg.setUnifS("normMat", glm::mat3(glm::transpose(glm::inverse(floorModel))));
                 floorProg.setUnifS("viewPos", cam.Position);
                 // floor spot light
-                floorSpotLight.setPos(spotPos, glm::mat4(1.0f));
-                floorSpotLight.setDir(spotLightDir, glm::mat4(1.0f));
-                floorSpotLight.setColors(spotLightColor, 0.2f, 0.3f, 0.5f);
+                floorProg.setLightPos(spotLight, glm::mat4(1.0f));
+                floorProg.setLightDir(spotLight, glm::mat4(1.0f));
                 // floor directional light
-                floorDirLight.setDir(dirLightDir, glm::mat4(1.0f));
-                floorDirLight.setColors(dirLightColor, 0.2f, 0.3f, 0.1f);
+                floorProg.setLightDir(dirLight, glm::mat4(1.0f));
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
                 glActiveTexture(GL_TEXTURE2);
@@ -436,12 +435,10 @@ int main() {
                  * With PBR, we no longer use different ambient/diffuse/specular
                  * values to determine color. Thus, they are all set to 1.
                 */
-                dirLight.setDir(dirLightDir, dirNormMat);
-                dirLight.setColors(dirLightColor, 1.0f, 1.0f, 1.0f);
+                sProg.setLightDir(dirLight, dirNormMat);
                 // Set spotlight colors and position/direction
-                spotLight.setPos(spotPos, view);
-                spotLight.setDir(spotLightDir, dirNormMat);
-                spotLight.setColors(spotLightColor, 1.0f, 1.0f, 1.0f);
+                sProg.setLightPos(spotLight, view);
+                sProg.setLightDir(spotLight, dirNormMat);
 
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
@@ -476,7 +473,7 @@ int main() {
                 lightProg.setUnif(lightViewID, view);
                 lightProg.setUnif(lightProjID, projection);
                 lightProg.setUnifS("model", lightSphereModel);
-                lightProg.setUnifS("color", spotLightColor);
+                lightProg.setUnifS("color", spotLight.cLight);
                 sphere.Draw(lightProg, 1, nullptr, nullptr);
             }
 

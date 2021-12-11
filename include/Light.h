@@ -5,33 +5,21 @@
 #include <glm/glm.hpp>
 #include "Shader.h"
 
-
-class Light {
-public:
-	Shader shader;
-
-	// Default constructor
-	Light();
-	// Constructor sets some initial values and gets IDs
-	Light(const std::string name, Shader shaderProg,
-		bool directional = false, float width = 0.0f, float constant = 1.0f,
-		float linear = 1.0f, float quadratic = 1.0f, float cutOff = -1.0f,
-		float outerCutOff = -1.0f);
-
-	// Initializer function for use after construction
-	void initVals(const std::string name, Shader shaderProg,
-		bool directional = false, float width = 0.0f, float constant = 1.0f,
-		float linear = 1.0f, float quadratic = 1.0f, float cutOff = -1.0f,
-		float outerCutOff = -1.0f);
-
-	// Functions for setting parameters
-	void setPos(glm::vec3 position, glm::mat4 transform);
-	void setDir(glm::vec3 direction, glm::mat3 dirNormMatrix);
-	void setColors(glm::vec3 color, float ambientMult, float diffuseMult, float specularMult);
-
-private:
-	// array of IDs
-	int IDs[5];
+struct Light {
+	std::string name;
+	bool directional = false;
+	float width = 0.0f;
+	float falloffConstant = 1.0f;
+	float falloffLinear = 1.0f;
+	float falloffQuadratic = 1.0f;
+	float cutOff = -1.0f;
+	float outerCutOff = -1.0f;
+	glm::vec3 cLight = glm::vec3(0.0f);
+	glm::vec3 position = glm::vec3(0.0f);
+	glm::vec3 direction = glm::vec3(0.0f);
+	float ambientMult = 1.0f;
+	float diffuseMult = 1.0f;
+	float specularMult = 1.0f;
 };
 
 #endif
