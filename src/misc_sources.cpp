@@ -202,14 +202,14 @@ const float sources::skyboxVertices[108] {
      1.0f, -1.0f,  1.0f
 };
 
-const float sources::quadVertices[48] {
-    // positions         // normals         // texture Coords
-    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,
-    -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 10.0f,
-     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,
-    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
-     0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 0.0f,
+const float sources::quadVertices[66] {
+    // positions         // normals         // texture Coords   // tangents
+    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,         1.0f, 0.0f, 0.0f,
+     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,       1.0f, 0.0f, 0.0f,
+    -0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 10.0f,        1.0f, 0.0f, 0.0f,
+     0.5f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 10.0f,       1.0f, 0.0f, 0.0f,
+    -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,         1.0f, 0.0f, 0.0f,
+     0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  10.0f, 0.0f,        1.0f, 0.0f, 0.0f,
 };
 
 const float sources::screenQuadVertices[24] {

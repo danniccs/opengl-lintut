@@ -24,28 +24,28 @@ const unsigned int DIFF = 1;
 const unsigned int SPEC = 2;
 
 struct Vertex {
-	glm::vec3 position;
-	glm::vec3 normal;
-	glm::vec2 texCoord;
-	glm::vec3 tangent;
+  glm::vec3 position;
+  glm::vec3 normal;
+  glm::vec2 texCoord;
+  glm::vec3 tangent;
 };
 
 struct Texture {
-	unsigned int id;
-	unsigned int location;
-	std::string type;
-	std::string path;
+  unsigned int id;
+  unsigned int location;
+  std::string type;
+  std::string path;
 };
 
 struct Material {
-	glm::vec3 Ambient;
-	glm::vec3 Diffuse;
-	glm::vec3 Specular;
-	glm::vec3 Emissive;
-	float Shininess;
-	unsigned int ambId;
-	unsigned int diffId;
-	unsigned int specId;
-	unsigned int emisId;
-	unsigned int shinId;
+  glm::vec3 Ambient;
+  glm::vec3 Diffuse;
+  glm::vec3 Specular;
+  glm::vec3 Emissive;
+  float Shininess;
+  unsigned int ambId;
+  unsigned int diffId;
+  unsigned int specId;
+  unsigned int emisId;
+  unsigned int shinId;
 };

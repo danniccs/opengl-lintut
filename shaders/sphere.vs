@@ -17,43 +17,42 @@ uniform mat4 dirSpaceMat;
 uniform mat4 spotSpaceMat;
 
 out VS_OUT {
-    vec3 worldFragPos;
-    vec2 texCoords;
+  vec3 worldFragPos;
+  vec2 texCoords;
 
-    vec3 frenetFragPos;
-    vec3 frenetViewPos;
-    vec3 frenetLightDir;
-    vec3 frenetSpotPos;
-    vec3 frenetSpotDir;
+  vec3 frenetFragPos;
+  vec3 frenetViewPos;
+  vec3 frenetLightDir;
+  vec3 frenetSpotPos;
+  vec3 frenetSpotDir;
 
-    vec4 fragPosDirSpace;
-    vec4 fragPosSpotSpace;
-} vs_out;
-
-#define PI 3.1415926538
+  vec4 fragPosDirSpace;
+  vec4 fragPosSpotSpace;
+}
+vs_out;
 
 void main() {
-	gl_Position = projection * view * aModel * vec4(aPos, 1.0);
+  gl_Position = projection * view * aModel * vec4(aPos, 1.0);
 
-    vs_out.worldFragPos = vec3(aModel * vec4(aPos, 1.0));
-	vs_out.texCoords = aTexCoords;
+  vs_out.worldFragPos = vec3(aModel * vec4(aPos, 1.0));
+  vs_out.texCoords = aTexCoords;
 
-    // Fragment position in the view space of the lights.
-    vs_out.fragPosDirSpace = dirSpaceMat * aModel * vec4(aPos, 1.0);
-    vs_out.fragPosSpotSpace = spotSpaceMat * aModel * vec4(aPos, 1.0);
+  // Fragment position in the view space of the lights.
+  vs_out.fragPosDirSpace = dirSpaceMat * vec4(vs_out.worldFragPos, 1.0);
+  vs_out.fragPosSpotSpace = spotSpaceMat * vec4(vs_out.worldFragPos, 1.0);
 
-    // Construct tangent space matrix for normal mapping.
-    vec3 T = normalize(aNormMat * aTangent);
-    vec3 N = normalize(aNormMat * aNorm);
-    // Use Gram-Schmidt to re-orthogonalize.
-    T = normalize(T - dot(T, N) * N);
-    vec3 B = cross(N, T);
-    mat3 TBN = transpose(mat3(T,B,N));
+  // Construct tangent space matrix for normal mapping.
+  vec3 T = normalize(aNormMat * aTangent);
+  vec3 N = normalize(aNormMat * aNorm);
+  // Use Gram-Schmidt to re-orthogonalize.
+  T = normalize(T - dot(T, N) * N);
+  vec3 B = cross(N, T);
+  mat3 TBN = transpose(mat3(T, B, N));
 
-    // Send Frenet frame coordinate positions.
-    vs_out.frenetFragPos = TBN * vec3(aModel * vec4(aPos, 1.0));
-    vs_out.frenetViewPos = TBN * viewPos;
-    vs_out.frenetLightDir = TBN * dirLightDir;
-    vs_out.frenetSpotPos = TBN * spotLightPos;
-    vs_out.frenetSpotDir = TBN * spotLightDir;
+  // Send Frenet frame coordinate positions.
+  vs_out.frenetFragPos = TBN * vec3(aModel * vec4(aPos, 1.0));
+  vs_out.frenetViewPos = TBN * viewPos;
+  vs_out.frenetLightDir = TBN * dirLightDir;
+  vs_out.frenetSpotPos = TBN * spotLightPos;
+  vs_out.frenetSpotDir = TBN * spotLightDir;
 }
