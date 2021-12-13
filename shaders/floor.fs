@@ -199,7 +199,8 @@ vec3 calcSphereLambert(Light light, vec3 v, vec3 l, vec3 F0, vec3 albedo,
 
 // Use Karis' most representative point solution for spherical lights.
 vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
-                       vec3 n, vec3 v, vec3 F0, float roughness, float ndotv) {
+                       vec3 n, vec3 v, vec3 F0, float roughness, vec3 albedo,
+                       float metallic, float ndotv) {
 
   float radius = light.width / 2.0;
   float d = length(light.position - fs_in.worldFragPos);
@@ -230,7 +231,13 @@ vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
   float denominator = 4 * ndotv * ndotl + 0.0001;
   vec3 specular = numerator / denominator;
 
-  return specular * PI;
+  // Using kD ensures energy conservation.
+  vec3 kD = vec3(1.0) - F;
+  // Multiply kD by the inverse of metalness so metals do not have
+  // subsurface scattering.
+  kD *= 1.0 - metallic;
+
+  return kD * albedo + specular * PI;
 }
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
@@ -389,8 +396,7 @@ void main() {
                              spotLight);
   vec3 LoSpot =
       calcSphereReflect(spotLight, fs_in.frenetSpotDir, fs_in.frenetSpotPos,
-                        normal, v, F0, roughness, ndotv);
-  LoSpot += calcSphereLambert(spotLight, v, l, F0, albedo, metallic);
+                        normal, v, F0, roughness, albedo, metallic, ndotv);
   LoSpot *= spotLight.cLight * ndotl * shadow;
   Lo += LoSpot;
   // Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,

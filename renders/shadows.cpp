@@ -140,8 +140,8 @@ int main() {
   // glfwTerminate is called.
   {
     // compile and link the shader programs
-    Shader sProg((shaderPath / "sphere.vs").c_str(),
-                 (shaderPath / "sphere.fs").c_str());
+    Shader sProg((shaderPath / "object.vs").c_str(),
+                 (shaderPath / "object.fs").c_str());
     Shader floorProg((shaderPath / "floor.vs").c_str(),
                      (shaderPath / "floor.fs").c_str());
     Shader lightProg((shaderPath / "light_sphere.vs").c_str(),

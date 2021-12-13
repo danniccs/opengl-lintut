@@ -152,11 +152,36 @@ vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, vec3 F0,
 
   // Using kD ensures energy conservation.
   vec3 kD = vec3(1.0) - F;
-  // Multiply kD by the inverse of metalness so metals do not have
-  // subsurface scattering.
+  /*
+  Multiply kD by the inverse of metalness so metals do not have
+  subsurface scattering.
+  */
   kD *= 1.0 - metallic;
 
   return (kD * albedo + specular * PI) * cLight * ndotl;
+}
+
+/*
+Calculate GGX/Trowbridge-Reitz NDF modified to account for
+the change in energy caused by using a representative point
+solution for a sphere light.
+*/
+float sphereGGXNDF(vec3 n, vec3 m, float roughness, float radius,
+                   float distance) {
+  float alpha = roughness * roughness;
+  float alpha2 = alpha * alpha;
+  float alphaP = clamp(alpha + radius / (3.0 * distance), 0.0, 1.0);
+  float alphaP2 = alphaP * alphaP;
+  float alphaDiv = alphaP2 / alpha2;
+
+  float ndotm = max(dot(n, m), 0.0);
+  float ndotm2 = ndotm * ndotm;
+
+  float num = alpha2 * alphaP2;
+  float denom = (ndotm2 * (alphaP2 - 1.0) + 1.0);
+  denom *= denom;
+
+  return num / denom;
 }
 
 vec3 calcSphereLambert(Light light, vec3 v, vec3 l, vec3 F0, vec3 albedo,
@@ -174,8 +199,8 @@ vec3 calcSphereLambert(Light light, vec3 v, vec3 l, vec3 F0, vec3 albedo,
 
 // Use Karis' most representative point solution for spherical lights.
 vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
-                       vec3 n, vec3 v, vec3 F0, float roughness, float ndotv,
-                       vec3 albedo, float metallic) {
+                       vec3 n, vec3 v, vec3 F0, float roughness, vec3 albedo,
+                       float metallic, float ndotv) {
 
   float radius = light.width / 2.0;
   float d = length(light.position - fs_in.worldFragPos);
@@ -196,12 +221,9 @@ vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
   attenuation = (radius * radius) / (d * d);
   vec3 cLight = light.cLight * attenuation * intensity;
 
-  // Modify roughness to account for energy increase.
-  float alpha = roughness / clamp(roughness + radius / (3 * d), 0.0, 1.0);
-
   vec3 h = normalize(v + l);
-  float D = GGXNDF(n, h, alpha);
-  float G = geometrySmith(ndotv, ndotl, alpha);
+  float D = sphereGGXNDF(n, h, roughness, radius, d);
+  float G = geometrySmith(ndotv, ndotl, roughness);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
 
   vec3 numerator = D * G * F;
@@ -215,7 +237,7 @@ vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
   // subsurface scattering.
   kD *= 1.0 - metallic;
 
-  return albedo * kD + specular * PI;
+  return kD * albedo + specular * PI;
 }
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
@@ -372,15 +394,13 @@ void main() {
   ndotl = max(dot(l, normal), 0.0);
   shadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap,
                              spotLight);
-  /*
-  vec3 LoSpot = calcSphereReflect(spotLight, fs_in.frenetSpotDir,
-  fs_in.frenetSpotPos, normal, v, F0, roughness, ndotv, albedo, metallic);
-  LoSpot += calcSphereLambert(spotLight, v, l, F0, albedo, metallic);
+  vec3 LoSpot =
+      calcSphereReflect(spotLight, fs_in.frenetSpotDir, fs_in.frenetSpotPos,
+                        normal, v, F0, roughness, albedo, metallic, ndotv);
   LoSpot *= spotLight.cLight * ndotl * shadow;
   Lo += LoSpot;
-  */
-  Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
-                           albedo, metallic, roughness, ndotl, ndotv);
+  // Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
+  //                         albedo, metallic, roughness, ndotl, ndotv);
 
   vec3 ambient = vec3(0.03) * albedo * ao;
   vec3 color = ambient + Lo;
