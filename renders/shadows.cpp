@@ -55,9 +55,9 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 const unsigned int SHADOW_WIDTH = 1024;
 const unsigned int SHADOW_HEIGHT = 1024;
-const float POISSON_SPREAD = 400.0;
-const unsigned int NUM_SEARCH_SAMPLES = 32;
-const unsigned int NUM_PCF_SAMPLES = 48;
+const float SHADOW_MULT = 400.0;
+const unsigned int NUM_SEARCH_SAMPLES = 16;
+const unsigned int NUM_PCF_SAMPLES = 32;
 const unsigned int gCubeNR = 4;
 const unsigned int NUM_SPHERES = 3;
 
@@ -98,6 +98,7 @@ int main() {
   }
 
   // Check if negative swap interval values are supported, and activate v-sync
+  /*
   bool supported =
       static_cast<bool>(glfwExtensionSupported("WGL_EXT_swap_control_tear")) ||
       static_cast<bool>(glfwExtensionSupported("GLX_EXT_swap_control_tear"));
@@ -105,6 +106,7 @@ int main() {
     glfwSwapInterval(-1);
   else
     glfwSwapInterval(1);
+  */
 
   unsigned int err;
   while ((err = glGetError()) != GL_NO_ERROR) {
@@ -143,7 +145,7 @@ int main() {
     Shader sProg((shaderPath / "object.vs").c_str(),
                  (shaderPath / "object.fs").c_str());
     Shader floorProg((shaderPath / "floor.vs").c_str(),
-                     (shaderPath / "floor.fs").c_str());
+                     (shaderPath / "object.fs").c_str());
     Shader lightProg((shaderPath / "light_sphere.vs").c_str(),
                      (shaderPath / "light_sphere.fs").c_str());
     Shader shadowProg((shaderPath / "shadow_map.vs").c_str(),
@@ -232,7 +234,7 @@ int main() {
                     &NUM_PCF_SAMPLES);
     glBufferSubData(GL_UNIFORM_BUFFER,
                     32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 8, 4,
-                    &POISSON_SPREAD);
+                    &SHADOW_MULT);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
@@ -353,7 +355,7 @@ int main() {
     glm::mat4 projection;
 
     // Set the directional light attributes
-    Light dirLight{"dirLight", true};
+    Light dirLight("dirLight", true);
     dirLight.cLight = glm::vec3{0.3f, 0.3f, 0.3f};
     dirLight.direction = glm::vec3{3.0f, -4.0f, 0.0f};
     glm::mat4 dirView =
@@ -367,9 +369,8 @@ int main() {
     float cutOff = glm::cos(glm::radians(70.0f));
     constexpr float outerRadians = glm::radians(120.0f);
     float outerCutOff = glm::cos(outerRadians);
-    Light spotLight{"spotLight", false,      wSphere * lightSphereScaling,
-                    1.0f,        0.14f,      0.07f,
-                    cutOff,      outerCutOff};
+    Light spotLight("spotLight", false, wSphere * lightSphereScaling, 1.0f,
+                    0.14f, 0.07f, cutOff, outerCutOff);
     spotLight.position = glm::vec3(1.0f, 3.0f, 2.0f);
     spotLight.direction = glm::vec3(0.0f, -1.0f, -1.0f);
     spotLight.cLight = glm::vec3(1.0f, 1.0f, 1.0f);
@@ -502,7 +503,7 @@ int main() {
           floorProg.setUnif(floorProjID, projection);
           floorProg.setUnifS("dirSpaceMat", dirSpaceMat);
           floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
-          floorProg.setLightPos(spotLight, view);
+          floorProg.setLightPos(spotLight, glm::mat4(1.0f));
           floorProg.setLightDir(spotLight, dirNormMat);
           floorProg.setLightDir(dirLight, dirNormMat);
 
@@ -537,7 +538,7 @@ int main() {
           sProg.setUnif(sProjID, projection);
           sProg.setUnifS("dirSpaceMat", dirSpaceMat);
           sProg.setUnifS("spotSpaceMat", spotSpaceMat);
-          sProg.setLightPos(spotLight, view);
+          sProg.setLightPos(spotLight, glm::mat4(1.0f));
           sProg.setLightDir(spotLight, dirNormMat);
           sProg.setLightDir(dirLight, dirNormMat);
 

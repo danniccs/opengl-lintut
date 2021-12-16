@@ -47,7 +47,9 @@ void Model::getTextureLocations(Shader shader) {
 }
 
 // Approximation of the maximum distance of vertices in the model.
-float Model::getApproxWidth() const { return approxWidth; }
+float Model::getApproxWidth() const {
+  return approxWidth;
+}
 
 /*
     Calculates the bounding volume of the model using the plane normals
@@ -66,7 +68,7 @@ void Model::buildBoundingVolume() {
       }
     }
     boundingVolumeBounds[i] = (dMin);
-    boundingVolumeBounds[i] = (dMax);
+    boundingVolumeBounds[i + 1] = (dMax);
   }
 }
 

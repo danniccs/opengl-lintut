@@ -38,7 +38,7 @@ layout(std140, binding = 0) uniform shadowBlock {
   vec2 shadowTexelSize;
   int NUM_SEARCH_SAMPLES;
   int NUM_PCF_SAMPLES;
-  float poissonSpread;
+  float shadowMult;
 };
 
 uniform Light dirLight;
@@ -142,7 +142,7 @@ vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, vec3 F0,
 
   vec3 h = normalize(v + l);
   float D = GGXNDF(n, h, roughness);
-  float G = geometrySmith(ndotv, ndotl, roughness);
+  float G = geometrySmithAlt(n, v, l, roughness);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
 
   vec3 numerator = D * G * F;
@@ -172,7 +172,6 @@ float sphereGGXNDF(vec3 n, vec3 m, float roughness, float radius,
   float alpha2 = alpha * alpha;
   float alphaP = clamp(alpha + radius / (3.0 * distance), 0.0, 1.0);
   float alphaP2 = alphaP * alphaP;
-  float alphaDiv = alphaP2 / alpha2;
 
   float ndotm = max(dot(n, m), 0.0);
   float ndotm2 = ndotm * ndotm;
@@ -203,27 +202,26 @@ vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
                        float metallic, float ndotv) {
 
   float radius = light.width / 2.0;
-  float d = length(light.position - fs_in.worldFragPos);
 
   // Calculate a new light vector.
   vec3 viewReflect = reflect(-v, n);
   vec3 pcr = dot(frenetLightPos, viewReflect) * viewReflect - frenetLightPos;
   vec3 pcs = frenetLightPos + pcr * min(1, radius / length(pcr));
   vec3 l = normalize(pcs - fs_in.frenetFragPos);
-  float ndotl = max(dot(l, n), 0.0);
+  float d = length(pcs - fs_in.frenetFragPos);
+  float ndotl = max(dot(n, l), 0.0);
 
   // Calculate the color of light at the fragment.
-  float intensity = 1.0;
-  float attenuation = 1.0;
   float theta = dot(l, normalize(-frenetLightDir));
   float epsilon = light.cutOff - light.outerCutOff;
-  intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
-  attenuation = (radius * radius) / (d * d);
+  float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
+  float attenuation = (radius * radius) / (d * d);
+  attenuation = radius;
   vec3 cLight = light.cLight * attenuation * intensity;
 
   vec3 h = normalize(v + l);
   float D = sphereGGXNDF(n, h, roughness, radius, d);
-  float G = geometrySmith(ndotv, ndotl, roughness);
+  float G = geometrySmithAlt(n, v, l, roughness);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
 
   vec3 numerator = D * G * F;
@@ -237,7 +235,7 @@ vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
   // subsurface scattering.
   kD *= 1.0 - metallic;
 
-  return kD * albedo + specular * PI;
+  return (kD * albedo + specular * PI) * cLight * ndotl;
 }
 
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
@@ -381,7 +379,7 @@ void main() {
 
   vec3 Lo = vec3(0.0);
 
-  // Lo from directional light
+  // Lo from directional light.
   vec3 l = normalize(-fs_in.frenetLightDir);
   float ndotl = max(dot(l, normal), 0.0);
   float shadow =
@@ -389,7 +387,7 @@ void main() {
   Lo += shadow * calcLight(dirLight, fs_in.frenetLightDir, normal, v, l, F0,
                            albedo, metallic, roughness, ndotl, ndotv);
 
-  // Lo from spot light
+  // Lo from spot light.
   l = normalize(fs_in.frenetSpotPos - fs_in.frenetFragPos);
   ndotl = max(dot(l, normal), 0.0);
   shadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap,
@@ -397,9 +395,9 @@ void main() {
   vec3 LoSpot =
       calcSphereReflect(spotLight, fs_in.frenetSpotDir, fs_in.frenetSpotPos,
                         normal, v, F0, roughness, albedo, metallic, ndotv);
-  LoSpot *= spotLight.cLight * ndotl * shadow;
+  LoSpot *= shadow;
   Lo += LoSpot;
-  // Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
+  //Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
   //                         albedo, metallic, roughness, ndotl, ndotv);
 
   vec3 ambient = vec3(0.03) * albedo * ao;

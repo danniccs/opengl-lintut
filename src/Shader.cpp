@@ -134,9 +134,6 @@ void Shader::setLight(Light light) {
   setUnifS(name + ".quadratic", light.falloffQuadratic);
   setUnifS(name + ".cutOff", light.cutOff);
   setUnifS(name + ".outerCutOff", light.outerCutOff);
-  setUnifS(name + ".ambient", light.cLight * light.ambientMult);
-  setUnifS(name + ".diffuse", light.cLight * light.diffuseMult);
-  setUnifS(name + ".specular", light.cLight * light.specularMult);
   setUnifS(name + ".cLight", light.cLight);
 
   std::array<int, 2> &IDs = lightIDs[name];

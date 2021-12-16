@@ -5,20 +5,28 @@
 #include <string>
 
 struct Light {
+  Light(std::string aName, bool isDirectional = false, float aWidth = 0.0f,
+        float aFalloffConstant = 1.0f, float aFalloffLinear = 1.0f,
+        float aFalloffQuadratic = 1.0f, float aCutOff = -1.0f,
+        float aOuterCutOff = -1.0f, glm::vec3 aCLight = glm::vec3(0.0f),
+        glm::vec3 aPosition = glm::vec3(0.0f),
+        glm::vec3 aDirection = glm::vec3(0.0f))
+      : name(aName), directional(isDirectional), width(aWidth),
+        falloffConstant(aFalloffConstant), falloffLinear(aFalloffLinear),
+        cutOff(aCutOff), outerCutOff(aOuterCutOff), cLight(aCLight),
+        position(aPosition), direction(aDirection) {}
+
   std::string name;
-  bool directional = false;
-  float width = 0.0f;
-  float falloffConstant = 1.0f;
-  float falloffLinear = 1.0f;
-  float falloffQuadratic = 1.0f;
-  float cutOff = -1.0f;
-  float outerCutOff = -1.0f;
-  glm::vec3 cLight = glm::vec3(0.0f);
-  glm::vec3 position = glm::vec3(0.0f);
-  glm::vec3 direction = glm::vec3(0.0f);
-  float ambientMult = 1.0f;
-  float diffuseMult = 1.0f;
-  float specularMult = 1.0f;
+  bool directional;
+  float width;
+  float falloffConstant;
+  float falloffLinear;
+  float falloffQuadratic;
+  float cutOff;
+  float outerCutOff;
+  glm::vec3 cLight;
+  glm::vec3 position;
+  glm::vec3 direction;
 };
 
 #endif
