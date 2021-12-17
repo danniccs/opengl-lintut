@@ -55,11 +55,10 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 const unsigned int SHADOW_WIDTH = 1024;
 const unsigned int SHADOW_HEIGHT = 1024;
-const float SHADOW_MULT = 400.0;
+const float SHADOW_MULT = 0.5;
 const unsigned int NUM_SEARCH_SAMPLES = 16;
 const unsigned int NUM_PCF_SAMPLES = 32;
-const unsigned int gCubeNR = 4;
-const unsigned int NUM_SPHERES = 3;
+const unsigned int NUM_SPHERES = 4;
 
 namespace toggles { // Only changed by input processing
 bool bKeyPressed = false;
@@ -247,62 +246,73 @@ int main() {
     unsigned int heightMaps[NUM_SPHERES];
     // Rusted iron sphere.
     albedoMaps[0] =
-        loadTexture((pbrTexturePath / "rusted_iron/albedo.png").c_str());
+        loadTexture((pbrTexturePath / "rusted_iron/albedo.png").string());
     normalMaps[0] =
-        loadTexture((pbrTexturePath / "rusted_iron/normal.png").c_str());
+        loadTexture((pbrTexturePath / "rusted_iron/normal.png").string());
     metallicMaps[0] =
-        loadTexture((pbrTexturePath / "rusted_iron/metallic.png").c_str());
+        loadTexture((pbrTexturePath / "rusted_iron/metallic.png").string());
     roughnessMaps[0] =
-        loadTexture((pbrTexturePath / "rusted_iron/roughness.png").c_str());
-    aoMaps[0] = loadTexture((pbrTexturePath / "streaky_metal/ao.png").c_str());
+        loadTexture((pbrTexturePath / "rusted_iron/roughness.png").string());
+    aoMaps[0] = loadTexture((pbrTexturePath / "streaky_metal/ao.png").string());
     // Streaky metal sphere.
     albedoMaps[1] =
-        loadTexture((pbrTexturePath / "streaky_metal/albedo.png").c_str());
+        loadTexture((pbrTexturePath / "streaky_metal/albedo.png").string());
     normalMaps[1] =
-        loadTexture((pbrTexturePath / "streaky_metal/normal.png").c_str());
+        loadTexture((pbrTexturePath / "streaky_metal/normal.png").string());
     metallicMaps[1] =
-        loadTexture((pbrTexturePath / "streaky_metal/metallic.png").c_str());
+        loadTexture((pbrTexturePath / "streaky_metal/metallic.png").string());
     roughnessMaps[1] =
-        loadTexture((pbrTexturePath / "streaky_metal/roughness.png").c_str());
-    aoMaps[1] = loadTexture((pbrTexturePath / "streaky_metal/ao.png").c_str());
+        loadTexture((pbrTexturePath / "streaky_metal/roughness.png").string());
+    aoMaps[1] = loadTexture((pbrTexturePath / "streaky_metal/ao.png").string());
     // Worn metal sphere.
     albedoMaps[2] =
-        loadTexture((pbrTexturePath / "worn-metal/albedo.png").c_str());
+        loadTexture((pbrTexturePath / "worn-metal/albedo.png").string());
     normalMaps[2] =
-        loadTexture((pbrTexturePath / "worn-metal/normal.png").c_str());
+        loadTexture((pbrTexturePath / "worn-metal/normal.png").string());
     metallicMaps[2] =
-        loadTexture((pbrTexturePath / "worn-metal/metallic.png").c_str());
+        loadTexture((pbrTexturePath / "worn-metal/metallic.png").string());
     roughnessMaps[2] =
-        loadTexture((pbrTexturePath / "worn-metal/roughness.png").c_str());
-    aoMaps[2] = loadTexture((pbrTexturePath / "worn-metal/ao.png").c_str());
+        loadTexture((pbrTexturePath / "worn-metal/roughness.png").string());
+    aoMaps[2] = loadTexture((pbrTexturePath / "worn-metal/ao.png").string());
     heightMaps[2] =
-        loadTexture((pbrTexturePath / "worn-metal/height.png").c_str());
+        loadTexture((pbrTexturePath / "worn-metal/height.png").string());
+    // Gray granite sphere.
+    albedoMaps[3] =
+        loadTexture((pbrTexturePath / "gray_granite/albedo.png").string());
+    normalMaps[3] =
+        loadTexture((pbrTexturePath / "gray_granite/normal.png").string());
+    metallicMaps[3] =
+        loadTexture((pbrTexturePath / "gray_granite/metallic.png").string());
+    roughnessMaps[3] =
+        loadTexture((pbrTexturePath / "gray_granite/roughness.png").string());
+    aoMaps[3] = loadTexture((pbrTexturePath / "gray_granite/ao.png").string());
 
     // Load floor PBR maps.
     unsigned int floorAlbedo =
-        loadTexture((pbrTexturePath / "brown_tile/albedo.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/albedo.png").string());
     unsigned int floorNormal =
-        loadTexture((pbrTexturePath / "brown_tile/normal.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/normal.png").string());
     unsigned int floorMetallic =
-        loadTexture((pbrTexturePath / "brown_tile/metallic.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/metallic.png").string());
     unsigned int floorRoughness =
-        loadTexture((pbrTexturePath / "brown_tile/roughness.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/roughness.png").string());
     unsigned int floorAO =
-        loadTexture((pbrTexturePath / "brown_tile/ao.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/ao.png").string());
     unsigned int floorHeight =
-        loadTexture((pbrTexturePath / "brown_tile/height.png").c_str());
+        loadTexture((pbrTexturePath / "brown_tile/height.png").string());
 
     // Load boulder PBR maps.
-    unsigned int boulderAlbedo =
-        loadTexture((pbrTexturePath / "sharp-boulder/albedo.png").c_str());
-    unsigned int boulderNormal =
-        loadTexture((pbrTexturePath / "sharp-boulder/normal.png").c_str());
-    unsigned int boulderMetallic =
-        loadTexture((pbrTexturePath / "sharp-boulder/metallic.png").c_str());
+    unsigned int boulderAlbedo = loadTexture(
+        (pbrTexturePath / "sharp-boulder/albedo.png").string(), false, false);
+    unsigned int boulderNormal = loadTexture(
+        (pbrTexturePath / "sharp-boulder/normal.png").string(), false, false, true);
+    unsigned int boulderMetallic = loadTexture(
+        (pbrTexturePath / "sharp-boulder/metallic.png").string(), false, false);
     unsigned int boulderRoughness =
-        loadTexture((pbrTexturePath / "sharp-boulder/roughness.png").c_str());
-    unsigned int boulderAO =
-        loadTexture((pbrTexturePath / "sharp-boulder/ao.png").c_str());
+        loadTexture((pbrTexturePath / "sharp-boulder/roughness.png").string(),
+                    false, false);
+    unsigned int boulderAO = loadTexture(
+        (pbrTexturePath / "sharp-boulder/ao.png").string(), false, false);
 
     // Load the floor model.
     SimpleMesh floor(sources::quadVertices, 6, std::vector<std::string>(),
@@ -318,16 +328,17 @@ int main() {
                        glm::mat3(glm::transpose(glm::inverse(floorModel))));
 
     // Load the sphere model.
-    fs::path spherePath((resourcePath / "sphere.obj").c_str());
+    fs::path spherePath((resourcePath / "sphere2.obj").c_str());
     Model sphere(spherePath, false);
     float wSphere = sphere.getApproxWidth();
-    float lightSphereScaling = 0.3f;
+    float lightSphereScaling = 0.6f;
     float pbrSphereScaling = 0.4f;
     // Set sphere positions.
     glm::vec3 spherePos[NUM_SPHERES]{
         glm::vec3(0.0f, 2.0f, -1.0f),
         glm::vec3(1.0f, 2.0f, -1.0f),
         glm::vec3(1.0f, 1.0f, -1.0f),
+        glm::vec3(0.0f, 1.0f, -1.0f),
     };
     glm::mat4 sphereModelMats[NUM_SPHERES];
     glm::mat3 sphereNormMats[NUM_SPHERES];
@@ -346,7 +357,7 @@ int main() {
     Model boulder(boulderPath, false);
     // Set boulder position.
     glm::mat4 boulderModelMat =
-        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f));
+        glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 0.0f));
     glm::mat3 boulderNormMat =
         glm::mat3(glm::transpose(glm::inverse(boulderModelMat)));
 

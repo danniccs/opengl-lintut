@@ -1,15 +1,14 @@
 #include "texture_loader.h"
 #include "stb_image.h"
-#include <GLFW/glfw3.h>
-#include <glad/glad.h>
 #include <iostream>
 #include <vector>
 
 using namespace std;
 
 // utility function for loading a 2D texture from file (generates the texture)
-unsigned int loadTexture(string path, bool srgb, bool flip, GLenum sWrap,
-                         GLenum tWrap, GLenum minFilter, GLenum magFilter) {
+unsigned int loadTexture(string path, bool srgb, bool flip, bool flipGreen,
+                         GLenum sWrap, GLenum tWrap, GLenum minFilter,
+                         GLenum magFilter) {
   // tell stb_image to flip images on load (the image y axis tends to start from
   // the top)
   stbi_set_flip_vertically_on_load(flip);
@@ -20,6 +19,13 @@ unsigned int loadTexture(string path, bool srgb, bool flip, GLenum sWrap,
   int width, height, nrComponents;
   unsigned char *data =
       stbi_load(path.c_str(), &width, &height, &nrComponents, 0);
+
+  // Flip green channel, useful for normal maps defined for DirectX.
+  if (flipGreen) {
+    for (int i = 0; i < width * height; ++i)
+      data[i * nrComponents + 1] = 255 - data[i * nrComponents + 1];
+  }
+
   if (data) {
     GLenum iformat = GL_RGB;
     GLenum eformat = GL_RGB;
@@ -36,12 +42,8 @@ unsigned int loadTexture(string path, bool srgb, bool flip, GLenum sWrap,
         iformat = GL_SRGB;
       else if (nrComponents == 4)
         iformat = GL_SRGB_ALPHA;
-    } else {
-      if (nrComponents == 3)
-        iformat = GL_RGB;
-      else if (nrComponents == 4)
-        iformat = GL_RGBA;
-    }
+    } else
+      iformat = eformat;
 
     glBindTexture(GL_TEXTURE_2D, textureID);
     glTexImage2D(GL_TEXTURE_2D, 0, iformat, width, height, 0, eformat,

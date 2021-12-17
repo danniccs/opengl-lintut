@@ -13,8 +13,9 @@ struct Light {
         glm::vec3 aDirection = glm::vec3(0.0f))
       : name(aName), directional(isDirectional), width(aWidth),
         falloffConstant(aFalloffConstant), falloffLinear(aFalloffLinear),
-        cutOff(aCutOff), outerCutOff(aOuterCutOff), cLight(aCLight),
-        position(aPosition), direction(aDirection) {}
+        falloffQuadratic(aFalloffQuadratic), cutOff(aCutOff),
+        outerCutOff(aOuterCutOff), cLight(aCLight), position(aPosition),
+        direction(aDirection) {}
 
   std::string name;
   bool directional;

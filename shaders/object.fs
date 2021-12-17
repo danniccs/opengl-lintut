@@ -252,7 +252,7 @@ float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
         poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
         poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
     float depth =
-        texture(map, projCoords.xy + offset * shadowTexelSize * searchWidth).r;
+        texture(map, projCoords.xy + offset * shadowTexelSize * searchWidth * shadowMult).r;
     if (depth < projCoords.z) {
       blockerDepth += depth;
       ++numBlockers;
@@ -304,7 +304,7 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
                            poissonDisk[i].x * rotation[i].y +
                                poissonDisk[i].y * rotation[i].x);
         vec2 sampleCenter =
-            projCoords.xy + offset * shadowTexelSize * wPenumbra;
+            projCoords.xy + offset * shadowTexelSize * wPenumbra * shadowMult;
 
         // With Poisson disk sampling (remember to divide final result by 4.0)
         for (int j = 0; j < 4; ++j) {
@@ -400,7 +400,7 @@ void main() {
   //Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
   //                         albedo, metallic, roughness, ndotl, ndotv);
 
-  vec3 ambient = vec3(0.03) * albedo * ao;
+  vec3 ambient = vec3(0.04) * albedo * ao;
   vec3 color = ambient + Lo;
 
   // HDR Tonemapping

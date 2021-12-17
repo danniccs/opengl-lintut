@@ -7,7 +7,8 @@
 #include <vector>
 
 unsigned int loadTexture(std::string path, bool srgb = false, bool flip = true,
-                         GLenum sWrap = GL_REPEAT, GLenum tWrap = GL_REPEAT,
+                         bool flipGreen = false, GLenum sWrap = GL_REPEAT,
+                         GLenum tWrap = GL_REPEAT,
                          GLenum minFilter = GL_LINEAR_MIPMAP_LINEAR,
                          GLenum magFilter = GL_LINEAR);
 

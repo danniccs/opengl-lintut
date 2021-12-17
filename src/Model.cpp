@@ -7,8 +7,10 @@
 
 using namespace std;
 
-unsigned int aiProcessSteps = aiProcess_Triangulate | aiProcess_FlipUVs |
-                              aiProcess_GenNormals | aiProcess_OptimizeMeshes;
+unsigned int aiProcessSteps =
+    aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals |
+    aiProcess_CalcTangentSpace | aiProcess_OptimizeGraph |
+    aiProcess_OptimizeMeshes;
 
 Model::Model(string path, bool bSRGB, vector<string> cubeMapPaths) {
   if (!cubeMapPaths.empty()) {
@@ -47,9 +49,7 @@ void Model::getTextureLocations(Shader shader) {
 }
 
 // Approximation of the maximum distance of vertices in the model.
-float Model::getApproxWidth() const {
-  return approxWidth;
-}
+float Model::getApproxWidth() const { return approxWidth; }
 
 /*
     Calculates the bounding volume of the model using the plane normals
@@ -83,9 +83,7 @@ void Model::approximateWidth() {
 
 void Model::loadModel(string path) {
   Assimp::Importer importer;
-  const aiScene *scene =
-      importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs |
-                                  aiProcess_CalcTangentSpace | aiProcessSteps);
+  const aiScene *scene = importer.ReadFile(path, aiProcessSteps);
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
       !scene->mRootNode) {
     cout << "ERROR::ASSIMP::" << importer.GetErrorString() << endl;
@@ -134,13 +132,16 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene) {
     vertex.normal = auxVert;
 
     if (mesh->mTextureCoords[0]) {
-      vertex.texCoord.x = mesh->mTextureCoords[0][i].x;
-      vertex.texCoord.y = mesh->mTextureCoords[0][i].y;
+      glm::vec2 auxTex;
+      auxTex.x = mesh->mTextureCoords[0][i].x;
+      auxTex.y = mesh->mTextureCoords[0][i].y;
+      vertex.texCoord = auxTex;
 
       auxVert.x = mesh->mTangents[i].x;
       auxVert.y = mesh->mTangents[i].y;
       auxVert.z = mesh->mTangents[i].z;
       vertex.tangent = auxVert;
+
     } else {
       vertex.texCoord = glm::vec2(0.0f);
       vertex.tangent = glm::vec3(0.0f);
