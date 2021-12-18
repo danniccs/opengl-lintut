@@ -9,9 +9,13 @@ in VS_OUT {
   vec3 frenetLightDir;
   vec3 frenetSpotPos;
   vec3 frenetSpotDir;
+  vec3 frenetTubePos;
+  vec3 frenetP0;
+  vec3 frenetP1;
 
   vec4 fragPosDirSpace;
   vec4 fragPosSpotSpace;
+  vec4 fragPosTubeSpace;
 }
 fs_in;
 
@@ -22,6 +26,7 @@ struct Light {
   float outerCutOff; // max angle at which it gives any light
   bool directional;
   float width;
+  float len;
 
   vec3 cLight;
   vec3 ambient;
@@ -43,8 +48,10 @@ layout(std140, binding = 0) uniform shadowBlock {
 
 uniform Light dirLight;
 uniform Light spotLight;
+uniform Light tubeLight;
 uniform sampler2D shadowMap;
 uniform sampler2D spotShadowMap;
+uniform sampler2D tubeShadowMap;
 uniform sampler2D randomAngles;
 
 // PBR textures.
@@ -57,6 +64,10 @@ uniform sampler2D aoMap;
 // For Parallax Occlusion Mapping
 uniform float heightScale;
 uniform sampler2D heightMap;
+
+// Choose whether to draw area lights.
+uniform bool areaLights;
+uniform bool showTube;
 
 const float PI = 3.1415926538;
 const int MAX_NUM_SAMPLES = 64;
@@ -99,7 +110,7 @@ float geometrySmith(float ndotv, float ndotl, float roughness) {
   return 1.0 / (1.0 + lambdaV * lambdaL);
 }
 
-// Calculate Fresnel reflection using Schlick approximation.
+// Calculate Fresnel reflection using the Schlick approximation.
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
   return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
@@ -124,16 +135,18 @@ float geometrySmithAlt(vec3 N, vec3 V, vec3 L, float roughness) {
   return ggx1 * ggx2;
 }
 
+// Calculate the reflectance equation for point and directional lights.
 vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, vec3 F0,
                vec3 albedo, float metallic, float roughness, float ndotl,
                float ndotv) {
   // Calculate the color of light at the fragment.
   float intensity = 1.0;
   float attenuation = 1.0;
-  if (!light.directional) {
+  if (light.directional == false) {
     float theta = dot(l, normalize(-frenetDir));
-    float epsilon = light.cutOff - light.outerCutOff;
-    intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
+    // Add 0.0001 to prevent division by 0.
+    float epsilon = light.cutOff - light.outerCutOff + 0.0001;
+    intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
     float d = length(light.position - fs_in.worldFragPos);
     float radius = light.width / 2.0;
     attenuation = (radius * radius) / (d * d);
@@ -142,13 +155,23 @@ vec3 calcLight(Light light, vec3 frenetDir, vec3 n, vec3 v, vec3 l, vec3 F0,
 
   vec3 h = normalize(v + l);
   float D = GGXNDF(n, h, roughness);
-  float G = geometrySmithAlt(n, v, l, roughness);
+  // float G = geometrySmithAlt(n, v, l, roughness);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
 
-  vec3 numerator = D * G * F;
-  // Add 0.0001 to the denominator to avoid dividing by 0.
-  float denominator = 4 * ndotv * ndotl + 0.0001;
-  vec3 specular = numerator / denominator;
+  /*
+    vec3 numerator = D * G * F;
+    // Add 0.0001 to the denominator to avoid dividing by 0.
+    float denominator = 4 * ndotv * ndotl + 0.0001;
+    vec3 specular = numerator / denominator;
+    */
+
+  // Approximate G2 * denominator using Hammon's method.
+  float absNL = abs(ndotl);
+  float absNV = abs(ndotv);
+  float G2Denom =
+      0.5 / mix(2.0 * absNL * absNV, absNL + absNV, roughness * roughness);
+
+  vec3 specular = D * G2Denom * F;
 
   // Using kD ensures energy conservation.
   vec3 kD = vec3(1.0) - F;
@@ -166,25 +189,35 @@ Calculate GGX/Trowbridge-Reitz NDF modified to account for
 the change in energy caused by using a representative point
 solution for a sphere light.
 */
-float sphereGGXNDF(vec3 n, vec3 m, float roughness, float radius,
-                   float distance) {
+float sphereGGXNDF(vec3 n, vec3 m, float roughness, float radius, float d) {
   float alpha = roughness * roughness;
   float alpha2 = alpha * alpha;
-  float alphaP = clamp(alpha + radius / (3.0 * distance), 0.0, 1.0);
+  float alphaP = min(alpha + radius / (2.0 * d), 1.0);
   float alphaP2 = alphaP * alphaP;
 
   float ndotm = max(dot(n, m), 0.0);
   float ndotm2 = ndotm * ndotm;
 
-  float num = alpha2 * alphaP2;
-  float denom = (ndotm2 * (alphaP2 - 1.0) + 1.0);
-  denom *= denom;
+  float num = alpha2 * alpha2;
+  float denom = (ndotm2 * (alpha2 - 1.0) + 1.0);
+  denom = denom * denom * PI * alphaP2;
 
   return num / denom;
 }
 
-vec3 calcSphereLambert(Light light, vec3 v, vec3 l, vec3 F0, vec3 albedo,
-                       float metallic) {
+vec3 calcSphereLambert(Light light, vec3 frenetLightDir, vec3 v, vec3 l,
+                       vec3 F0, vec3 albedo, float metallic, float ndotl) {
+
+  float radius = light.width / 2.0;
+  float d = length(light.position - fs_in.worldFragPos);
+  // Calculate the color of light at the fragment.
+  float theta = dot(l, normalize(-frenetLightDir));
+  // Add 0.0001 to prevent division by 0.
+  float epsilon = light.cutOff - light.outerCutOff + 0.0001;
+  float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+  float attenuation = (radius * radius) / (d * d);
+  vec3 cLight = light.cLight * attenuation * intensity;
+
   vec3 h = normalize(v + l);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
   // Using kD ensures energy conservation.
@@ -193,41 +226,157 @@ vec3 calcSphereLambert(Light light, vec3 v, vec3 l, vec3 F0, vec3 albedo,
   // subsurface scattering.
   kD *= 1.0 - metallic;
 
-  return kD * albedo;
+  return kD * albedo * cLight * ndotl;
 }
 
 // Use Karis' most representative point solution for spherical lights.
-vec3 calcSphereReflect(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
-                       vec3 n, vec3 v, vec3 F0, float roughness, vec3 albedo,
-                       float metallic, float ndotv) {
+vec3 calcSphereGlossy(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
+                      vec3 n, vec3 v, vec3 F0, float roughness, vec3 albedo,
+                      float metallic, float ndotv) {
 
   float radius = light.width / 2.0;
 
   // Calculate a new light vector.
   vec3 viewReflect = reflect(-v, n);
-  vec3 pcr = dot(frenetLightPos, viewReflect) * viewReflect - frenetLightPos;
-  vec3 pcs = frenetLightPos + pcr * min(1, radius / length(pcr));
-  vec3 l = normalize(pcs - fs_in.frenetFragPos);
-  float d = length(pcs - fs_in.frenetFragPos);
+  vec3 L = frenetLightPos - fs_in.frenetFragPos;
+  vec3 pcr = dot(L, viewReflect) * viewReflect - L;
+  vec3 pcs = L + pcr * min(radius / length(pcr), 1.0);
+  vec3 l = normalize(pcs);
+  float d = length(pcs);
   float ndotl = max(dot(n, l), 0.0);
 
   // Calculate the color of light at the fragment.
   float theta = dot(l, normalize(-frenetLightDir));
-  float epsilon = light.cutOff - light.outerCutOff;
-  float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
+  // Add 0.0001 to prevent division by 0.
+  float epsilon = light.cutOff - light.outerCutOff + 0.0001;
+  float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
   float attenuation = (radius * radius) / (d * d);
-  attenuation = radius;
   vec3 cLight = light.cLight * attenuation * intensity;
 
   vec3 h = normalize(v + l);
   float D = sphereGGXNDF(n, h, roughness, radius, d);
-  float G = geometrySmithAlt(n, v, l, roughness);
+  // float G = geometrySmithAlt(n, v, l, roughness);
   vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
 
+  /*
   vec3 numerator = D * G * F;
   // Add 0.0001 to the denominator to avoid dividing by 0.
   float denominator = 4 * ndotv * ndotl + 0.0001;
   vec3 specular = numerator / denominator;
+  */
+
+  // Approximate G2 * denominator using Hammon's method.
+  float absNL = abs(ndotl);
+  float absNV = abs(ndotv);
+  float G2Denom =
+      0.5 / mix(2.0 * absNL * absNV, absNL + absNV, roughness * roughness);
+
+  vec3 specular = D * G2Denom * F;
+
+  // Using kD ensures energy conservation.
+  vec3 kD = vec3(1.0) - F;
+  // Multiply kD by the inverse of metalness so metals do not have
+  // subsurface scattering.
+  kD *= 1.0 - metallic;
+
+  return (kD * albedo + specular * PI) * cLight * ndotl;
+}
+
+/*
+Calculate GGX/Trowbridge-Reitz NDF modified to account for
+the change in energy caused by using a representative point
+solution for a tube light.
+*/
+float tubeGGXNDF(vec3 n, vec3 m, float roughness, float halfLen, float radius,
+                 float dL, float dS) {
+  float alpha = roughness * roughness;
+  float alpha2 = alpha * alpha;
+  float alphaT = min(alpha + halfLen / (2.0 * dL), 1.0);
+  float alphaS = min(alpha + radius / (2.0 * dS), 1.0);
+  float alphaS2 = alphaS * alphaS;
+
+  float ndotm = max(dot(n, m), 0.0);
+  float ndotm2 = ndotm * ndotm;
+
+  float num = alpha2 * alpha2 * alpha;
+  float denom = (ndotm2 * (alpha2 - 1.0) + 1.0);
+  denom = denom * denom * PI * alphaS2 * alphaT;
+
+  return num / denom;
+}
+
+vec3 calcTubeLambert(Light light, vec3 frenetP0, vec3 frenetP1, vec3 n, vec3 v,
+                     vec3 l, vec3 F0, vec3 albedo, float metallic) {
+  vec3 h = normalize(v + l);
+  vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
+  // Using kD ensures energy conservation.
+  vec3 kD = vec3(1.0) - F;
+  // Multiply kD by the inverse of metalness so metals do not have
+  // subsurface scattering.
+  kD *= 1.0 - metallic;
+
+  vec3 L0 = frenetP0 - fs_in.frenetFragPos;
+  vec3 L1 = frenetP1 - fs_in.frenetFragPos;
+  float d0 = length(L0);
+  float d1 = length(L1);
+
+  float num =
+      2.0 * clamp(dot(n, L0) / (2.0 * d0) + dot(n, L1) / (2.0 * d1), 0.0, 1.0);
+  float denom = d0 * d1 + dot(L0, L1) + 2.0;
+
+  return kD * (albedo / PI) * (num / denom) * light.cLight;
+}
+
+// Use Karis' most representative point solution for tube lights.
+vec3 calcTubeGlossy(Light light, vec3 frenetP0, vec3 frenetP1, vec3 n, vec3 v,
+                    vec3 F0, float roughness, vec3 albedo, float metallic,
+                    float ndotv) {
+
+  float radius = light.width / 2.0;
+  vec3 r = reflect(-v, n);
+
+  // Calculate a new light position for a line light.
+  vec3 L0 = frenetP0 - fs_in.frenetFragPos;
+  vec3 L1 = frenetP1 - fs_in.frenetFragPos;
+  vec3 Ld = L1 - L0;
+  float tNum = dot(r, L0) * dot(r, Ld) - dot(L0, Ld);
+  float lenLd = length(Ld);
+  float tDen = lenLd * lenLd - dot(r, Ld) * dot(r, Ld);
+  float t = clamp(tNum / tDen, 0.0, 1.0);
+  vec3 L = L0 + t * Ld;
+  float dL = length(L);
+
+  // Modify the new light vector using the sphere light modification.
+  vec3 pcr = dot(L, r) * r - L;
+  vec3 pcs = L + pcr * min(radius / length(pcr), 1.0);
+
+  vec3 l = normalize(pcs);
+  float d = length(pcs);
+  float ndotl = max(dot(n, l), 0.0);
+
+  // Calculate the color of light at the fragment.
+  float attenuation = 1.0 / (length(L0) * length(L1) + dot(L0, L1));
+  vec3 cLight = light.cLight * attenuation;
+
+  vec3 h = normalize(v + l);
+  float D = tubeGGXNDF(n, h, roughness, light.len / 2.0, radius, dL, d);
+  // float G = geometrySmithAlt(n, v, l, roughness);
+  vec3 F = fresnelSchlick(max(dot(h, v), 0.0), F0);
+
+  /*
+  vec3 numerator = D * G * F;
+  Add 0.0001 to the denominator to avoid dividing by 0.
+  float denominator = 4 * ndotv * ndotl + 0.0001;
+  vec3 specular = numerator / denominator;
+  */
+
+  // Approximate G2 * denominator using Hammon's method.
+  float absNL = abs(ndotl);
+  float absNV = abs(ndotv);
+  float G2Denom =
+      0.5 / mix(2.0 * absNL * absNV, absNL + absNV, roughness * roughness);
+
+  vec3 specular = D * G2Denom * F;
 
   // Using kD ensures energy conservation.
   vec3 kD = vec3(1.0) - F;
@@ -251,8 +400,9 @@ float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
     vec2 offset = vec2(
         poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
         poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
-    float depth =
-        texture(map, projCoords.xy + offset * shadowTexelSize * searchWidth * shadowMult).r;
+    float depth = texture(map, projCoords.xy + offset * shadowTexelSize *
+                                                   searchWidth * shadowMult)
+                      .r;
     if (depth < projCoords.z) {
       blockerDepth += depth;
       ++numBlockers;
@@ -384,21 +534,41 @@ void main() {
   float ndotl = max(dot(l, normal), 0.0);
   float shadow =
       shadowCalculation(fs_in.fragPosDirSpace, ndotl, shadowMap, dirLight);
+  /*
   Lo += shadow * calcLight(dirLight, fs_in.frenetLightDir, normal, v, l, F0,
                            albedo, metallic, roughness, ndotl, ndotv);
+  */
 
   // Lo from spot light.
   l = normalize(fs_in.frenetSpotPos - fs_in.frenetFragPos);
   ndotl = max(dot(l, normal), 0.0);
   shadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap,
                              spotLight);
-  vec3 LoSpot =
-      calcSphereReflect(spotLight, fs_in.frenetSpotDir, fs_in.frenetSpotPos,
-                        normal, v, F0, roughness, albedo, metallic, ndotv);
-  LoSpot *= shadow;
-  Lo += LoSpot;
-  //Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
-  //                         albedo, metallic, roughness, ndotl, ndotv);
+  if (showTube == false) {
+    if (areaLights == true) {
+      vec3 LoSphere =
+          calcSphereGlossy(spotLight, fs_in.frenetSpotDir, fs_in.frenetSpotPos,
+                           normal, v, F0, roughness, albedo, metallic, ndotv);
+      LoSphere *= shadow;
+      Lo += LoSphere;
+    } else {
+      Lo += shadow * calcLight(spotLight, fs_in.frenetSpotDir, normal, v, l, F0,
+                               albedo, metallic, roughness, ndotl, ndotv);
+    }
+  }
+
+  // Lo from tube light.
+  l = normalize(fs_in.frenetTubePos - fs_in.frenetFragPos);
+  ndotl = max(dot(l, normal), 0.0);
+  shadow = shadowCalculation(fs_in.fragPosTubeSpace, ndotl, tubeShadowMap,
+                             tubeLight);
+  if (showTube == true) {
+    vec3 LoTube =
+        calcTubeGlossy(tubeLight, fs_in.frenetP0, fs_in.frenetP1, normal, v, F0,
+                       roughness, albedo, metallic, ndotv);
+    LoTube *= shadow;
+    Lo += LoTube;
+  }
 
   vec3 ambient = vec3(0.04) * albedo * ao;
   vec3 color = ambient + Lo;
@@ -408,5 +578,5 @@ void main() {
   // Gamma correction
   color = pow(color, vec3(1.0 / gamma));
 
-  FragColor = vec4(color, 1.0f);
+  FragColor = vec4(color, 1.0);
 }

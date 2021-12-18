@@ -64,9 +64,14 @@ namespace toggles { // Only changed by input processing
 bool bKeyPressed = false;
 bool nKeyPressed = false;
 bool lKeyPressed = false;
+bool pKeyPressed = false;
+bool tKeyPressed = false;
+
 bool g_showNorms{false};
 bool g_blinn{true};
-bool g_Wireframe{false};
+bool g_wireframe{false};
+bool g_areaLights{true};
+bool g_showTube{false};
 } // namespace toggles
 
 int main() {
@@ -97,7 +102,6 @@ int main() {
   }
 
   // Check if negative swap interval values are supported, and activate v-sync
-  /*
   bool supported =
       static_cast<bool>(glfwExtensionSupported("WGL_EXT_swap_control_tear")) ||
       static_cast<bool>(glfwExtensionSupported("GLX_EXT_swap_control_tear"));
@@ -105,7 +109,6 @@ int main() {
     glfwSwapInterval(-1);
   else
     glfwSwapInterval(1);
-  */
 
   unsigned int err;
   while ((err = glGetError()) != GL_NO_ERROR) {
@@ -162,8 +165,8 @@ int main() {
     unsigned int shadowFBO;
     glGenFramebuffers(1, &shadowFBO);
     // Shadow maps.
-    unsigned int shadowMaps[2];
-    glGenTextures(2, shadowMaps);
+    unsigned int shadowMaps[3];
+    glGenTextures(3, shadowMaps);
     // Configure the shadow maps.
     float borderColor[]{1.0f, 1.0f, 1.0f, 1.0f};
     glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
@@ -175,6 +178,14 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
     glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
+                 SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -304,8 +315,9 @@ int main() {
     // Load boulder PBR maps.
     unsigned int boulderAlbedo = loadTexture(
         (pbrTexturePath / "sharp-boulder/albedo.png").string(), false, false);
-    unsigned int boulderNormal = loadTexture(
-        (pbrTexturePath / "sharp-boulder/normal.png").string(), false, false, true);
+    unsigned int boulderNormal =
+        loadTexture((pbrTexturePath / "sharp-boulder/normal.png").string(),
+                    false, false, true);
     unsigned int boulderMetallic = loadTexture(
         (pbrTexturePath / "sharp-boulder/metallic.png").string(), false, false);
     unsigned int boulderRoughness =
@@ -357,7 +369,7 @@ int main() {
     Model boulder(boulderPath, false);
     // Set boulder position.
     glm::mat4 boulderModelMat =
-        glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 0.0f));
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
     glm::mat3 boulderNormMat =
         glm::mat3(glm::transpose(glm::inverse(boulderModelMat)));
 
@@ -377,14 +389,14 @@ int main() {
     glm::mat4 dirSpaceMat = dirProjection * dirView;
 
     // Set spotlight attributes.
-    float cutOff = glm::cos(glm::radians(70.0f));
+    float cutOff = -1.0f;
     constexpr float outerRadians = glm::radians(120.0f);
-    float outerCutOff = glm::cos(outerRadians);
-    Light spotLight("spotLight", false, wSphere * lightSphereScaling, 1.0f,
-                    0.14f, 0.07f, cutOff, outerCutOff);
+    float outerCutOff = -1.0f;
+    Light spotLight("spotLight", false, wSphere * lightSphereScaling, 0.0f,
+                    1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
     spotLight.position = glm::vec3(1.0f, 3.0f, 2.0f);
     spotLight.direction = glm::vec3(0.0f, -1.0f, -1.0f);
-    spotLight.cLight = glm::vec3(1.0f, 1.0f, 1.0f);
+    spotLight.cLight = glm::vec3(10.0f);
     glm::mat4 lightSphereModel =
         glm::translate(glm::mat4(1.0f), spotLight.position);
     lightSphereModel =
@@ -398,42 +410,85 @@ int main() {
                                      glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 spotSpaceMat = spotProjection * spotView;
 
+    // Set tube light attributes.
+    float tubeLength = 3.0f;
+    float tubeWidth = 0.15f;
+    Light tubeLight("tubeLight", false, tubeWidth, tubeLength);
+    tubeLight.position = spotLight.position;
+    tubeLight.cLight = glm::vec3(10.0f);
+    // Define the orientation of the tube light by defining a tangent.
+    glm::vec3 tubeTan(1.0f, 0.0f, 0.0f);
+    // Find the end points of the tube.
+    glm::vec3 tubeP0 = tubeLight.position - tubeLength / 2.0f * tubeTan;
+    glm::vec3 tubeP1 = tubeLight.position + tubeLength / 2.0f * tubeTan;
+    glm::mat4 lightTubeModel =
+        glm::translate(glm::mat4(1.0f), tubeLight.position);
+    glm::mat4 tubeProjection =
+        glm::perspective(glm::radians(90.0f), aspect, 1.0f, 20.0f);
+    glm::mat4 tubeView = glm::lookAt(tubeLight.position, glm::vec3(0.0f),
+                                     glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 tubeSpaceMat = tubeProjection * tubeView;
+
     // Set light uniforms in shaders.
-    sProg.setLight(spotLight);
     sProg.setLight(dirLight);
-    floorProg.setLight(spotLight);
+    sProg.setLight(spotLight);
+    sProg.setLight(tubeLight);
     floorProg.setLight(dirLight);
+    floorProg.setLight(spotLight);
+    floorProg.setLight(tubeLight);
 
     // Set indices for textures.
     sProg.use();
     sProg.setUnifS("shadowMap", 0);
     sProg.setUnifS("spotShadowMap", 1);
-    sProg.setUnifS("randomAngles", 2);
-    sProg.setUnifS("albedoMap", 3);
-    sProg.setUnifS("normalMap", 4);
-    sProg.setUnifS("metallicMap", 5);
-    sProg.setUnifS("roughnessMap", 6);
-    sProg.setUnifS("aoMap", 7);
-    sProg.setUnifS("heightMap", 8);
+    sProg.setUnifS("tubeShadowMap", 2);
+    sProg.setUnifS("randomAngles", 3);
+    sProg.setUnifS("albedoMap", 4);
+    sProg.setUnifS("normalMap", 5);
+    sProg.setUnifS("metallicMap", 6);
+    sProg.setUnifS("roughnessMap", 7);
+    sProg.setUnifS("aoMap", 8);
+    sProg.setUnifS("heightMap", 9);
     // Set positions and directions for normal mapping.
     sProg.setUnifS("dirLightDir", dirLight.direction);
     sProg.setUnifS("spotLightPos", spotLight.position);
     sProg.setUnifS("spotLightDir", spotLight.direction);
+    sProg.setUnifS("tubeLightPos", tubeLight.position);
+    sProg.setUnifS("tubeP0", tubeP0);
+    sProg.setUnifS("tubeP1", tubeP1);
 
     floorProg.use();
     floorProg.setUnifS("shadowMap", 0);
     floorProg.setUnifS("spotShadowMap", 1);
-    floorProg.setUnifS("randomAngles", 2);
-    floorProg.setUnifS("albedoMap", 3);
-    floorProg.setUnifS("normalMap", 4);
-    floorProg.setUnifS("metallicMap", 5);
-    floorProg.setUnifS("roughnessMap", 6);
-    floorProg.setUnifS("aoMap", 7);
-    floorProg.setUnifS("heightMap", 8);
-    // Set positions and directions for normal mapping.
+    floorProg.setUnifS("tubeShadowMap", 2);
+    floorProg.setUnifS("randomAngles", 3);
+    floorProg.setUnifS("albedoMap", 4);
+    floorProg.setUnifS("normalMap", 5);
+    floorProg.setUnifS("metallicMap", 6);
+    floorProg.setUnifS("roughnessMap", 7);
+    floorProg.setUnifS("aoMap", 8);
+    floorProg.setUnifS("heightMap", 9);
     floorProg.setUnifS("dirLightDir", dirLight.direction);
     floorProg.setUnifS("spotLightPos", spotLight.position);
     floorProg.setUnifS("spotLightDir", spotLight.direction);
+    floorProg.setUnifS("tubeLightPos", tubeLight.position);
+    floorProg.setUnifS("tubeP0", tubeP0);
+    floorProg.setUnifS("tubeP1", tubeP1);
+
+    /*
+    Set light directions and positions. Should be inside the render loop if
+    lights could move around.
+    */
+    sProg.use();
+    sProg.setLightDir(dirLight, glm::mat4(1.0f));
+    sProg.setLightPos(spotLight, glm::mat4(1.0f));
+    sProg.setLightDir(spotLight, glm::mat4(1.0f));
+    sProg.setLightPos(tubeLight, glm::mat4(1.0f));
+    floorProg.use();
+    floorProg.setLightDir(dirLight, glm::mat4(1.0f));
+    floorProg.setLightPos(spotLight, glm::mat4(1.0f));
+    floorProg.setLightDir(spotLight, glm::mat4(1.0f));
+    floorProg.setLightPos(tubeLight, glm::mat4(1.0f));
 
     while (!glfwWindowShouldClose(window)) {
 
@@ -442,7 +497,7 @@ int main() {
       lastFrame = currentFrame;
 
       // Switch between wireframe
-      if (toggles::g_Wireframe)
+      if (toggles::g_wireframe)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
       else
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -495,6 +550,18 @@ int main() {
         shadowProg.setUnifS("model", boulderModelMat);
         boulder.Draw(shadowProg, 1, nullptr, nullptr);
 
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                               GL_TEXTURE_2D, shadowMaps[2], 0);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        shadowProg.setUnifS("lightSpaceMatrix", tubeSpaceMat);
+
+        for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+          shadowProg.setUnifS("model", sphereModelMats[i]);
+          sphere.Draw(shadowProg, 1, nullptr, nullptr);
+        }
+        shadowProg.setUnifS("model", boulderModelMat);
+        boulder.Draw(shadowProg, 1, nullptr, nullptr);
+
         glCullFace(GL_BACK);
       }
 
@@ -514,9 +581,11 @@ int main() {
           floorProg.setUnif(floorProjID, projection);
           floorProg.setUnifS("dirSpaceMat", dirSpaceMat);
           floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
-          floorProg.setLightPos(spotLight, glm::mat4(1.0f));
-          floorProg.setLightDir(spotLight, dirNormMat);
-          floorProg.setLightDir(dirLight, dirNormMat);
+          floorProg.setUnifS("tubeSpaceMat", tubeSpaceMat);
+
+          // Draw area or point light.
+          floorProg.setUnifS("areaLights", toggles::g_areaLights);
+          floorProg.setUnifS("showTube", toggles::g_showTube);
 
           // Floor Maps
           glActiveTexture(GL_TEXTURE0);
@@ -524,18 +593,20 @@ int main() {
           glActiveTexture(GL_TEXTURE1);
           glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE2);
-          glBindTexture(GL_TEXTURE_2D, randomTexture);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
           glActiveTexture(GL_TEXTURE3);
-          glBindTexture(GL_TEXTURE_2D, floorAlbedo);
+          glBindTexture(GL_TEXTURE_2D, randomTexture);
           glActiveTexture(GL_TEXTURE4);
-          glBindTexture(GL_TEXTURE_2D, floorNormal);
+          glBindTexture(GL_TEXTURE_2D, floorAlbedo);
           glActiveTexture(GL_TEXTURE5);
-          glBindTexture(GL_TEXTURE_2D, floorMetallic);
+          glBindTexture(GL_TEXTURE_2D, floorNormal);
           glActiveTexture(GL_TEXTURE6);
-          glBindTexture(GL_TEXTURE_2D, floorRoughness);
+          glBindTexture(GL_TEXTURE_2D, floorMetallic);
           glActiveTexture(GL_TEXTURE7);
-          glBindTexture(GL_TEXTURE_2D, floorAO);
+          glBindTexture(GL_TEXTURE_2D, floorRoughness);
           glActiveTexture(GL_TEXTURE8);
+          glBindTexture(GL_TEXTURE_2D, floorAO);
+          glActiveTexture(GL_TEXTURE9);
           glBindTexture(GL_TEXTURE_2D, floorHeight);
 
           floor.Draw(floorProg, 1, nullptr, nullptr);
@@ -549,31 +620,35 @@ int main() {
           sProg.setUnif(sProjID, projection);
           sProg.setUnifS("dirSpaceMat", dirSpaceMat);
           sProg.setUnifS("spotSpaceMat", spotSpaceMat);
-          sProg.setLightPos(spotLight, glm::mat4(1.0f));
-          sProg.setLightDir(spotLight, dirNormMat);
-          sProg.setLightDir(dirLight, dirNormMat);
+          sProg.setUnifS("tubeSpaceMat", tubeSpaceMat);
+
+          // Draw area or point light.
+          sProg.setUnifS("areaLights", toggles::g_areaLights);
+          sProg.setUnifS("showTube", toggles::g_showTube);
 
           glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
           glActiveTexture(GL_TEXTURE1);
           glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE2);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
+          glActiveTexture(GL_TEXTURE3);
           glBindTexture(GL_TEXTURE_2D, randomTexture);
 
           // Draw the spheres.
           for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
-            glActiveTexture(GL_TEXTURE3);
-            glBindTexture(GL_TEXTURE_2D, albedoMaps[i]);
             glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_2D, normalMaps[i]);
+            glBindTexture(GL_TEXTURE_2D, albedoMaps[i]);
             glActiveTexture(GL_TEXTURE5);
-            glBindTexture(GL_TEXTURE_2D, metallicMaps[i]);
+            glBindTexture(GL_TEXTURE_2D, normalMaps[i]);
             glActiveTexture(GL_TEXTURE6);
-            glBindTexture(GL_TEXTURE_2D, roughnessMaps[i]);
+            glBindTexture(GL_TEXTURE_2D, metallicMaps[i]);
             glActiveTexture(GL_TEXTURE7);
+            glBindTexture(GL_TEXTURE_2D, roughnessMaps[i]);
+            glActiveTexture(GL_TEXTURE8);
             glBindTexture(GL_TEXTURE_2D, aoMaps[i]);
             if (i == 2) {
-              glActiveTexture(GL_TEXTURE8);
+              glActiveTexture(GL_TEXTURE9);
               glBindTexture(GL_TEXTURE_2D, heightMaps[i]);
             }
             // Call the model draw function for the spheres.
@@ -581,15 +656,15 @@ int main() {
           }
 
           // Draw the boulder.
-          glActiveTexture(GL_TEXTURE3);
-          glBindTexture(GL_TEXTURE_2D, boulderAlbedo);
           glActiveTexture(GL_TEXTURE4);
-          glBindTexture(GL_TEXTURE_2D, boulderNormal);
+          glBindTexture(GL_TEXTURE_2D, boulderAlbedo);
           glActiveTexture(GL_TEXTURE5);
-          glBindTexture(GL_TEXTURE_2D, boulderMetallic);
+          glBindTexture(GL_TEXTURE_2D, boulderNormal);
           glActiveTexture(GL_TEXTURE6);
-          glBindTexture(GL_TEXTURE_2D, boulderRoughness);
+          glBindTexture(GL_TEXTURE_2D, boulderMetallic);
           glActiveTexture(GL_TEXTURE7);
+          glBindTexture(GL_TEXTURE_2D, boulderRoughness);
+          glActiveTexture(GL_TEXTURE8);
           glBindTexture(GL_TEXTURE_2D, boulderAO);
           boulder.Draw(sProg, 1, &boulderModelMat, &boulderNormMat);
         }
@@ -674,10 +749,26 @@ void processInput(GLFWwindow *window) {
   }
 
   if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS && !toggles::lKeyPressed) {
-    toggles::g_Wireframe = !toggles::g_Wireframe;
+    toggles::g_wireframe = !toggles::g_wireframe;
     toggles::lKeyPressed = true;
   }
   if (glfwGetKey(window, GLFW_KEY_L) == GLFW_RELEASE) {
     toggles::lKeyPressed = false;
+  }
+
+  if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !toggles::pKeyPressed) {
+    toggles::g_areaLights = !toggles::g_areaLights;
+    toggles::pKeyPressed = true;
+  }
+  if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE) {
+    toggles::pKeyPressed = false;
+  }
+
+  if (glfwGetKey(window, GLFW_KEY_T) == GLFW_PRESS && !toggles::tKeyPressed) {
+    toggles::g_showTube = !toggles::g_showTube;
+    toggles::tKeyPressed = true;
+  }
+  if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE) {
+    toggles::tKeyPressed = false;
   }
 }

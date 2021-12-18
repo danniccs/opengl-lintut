@@ -129,6 +129,7 @@ void Shader::setLight(Light light) {
   const std::string &name = light.name;
   setUnifS(name + ".directional", light.directional);
   setUnifS(name + ".width", light.width);
+  setUnifS(name + ".len", light.length);
   setUnifS(name + ".constant", light.falloffConstant);
   setUnifS(name + ".linear", light.falloffLinear);
   setUnifS(name + ".quadratic", light.falloffQuadratic);
@@ -145,7 +146,7 @@ void Shader::setLightPos(const Light &light, const glm::mat4 &transform) const {
   glm::vec4 aux = transform * glm::vec4(light.position, 1.0);
   glm::vec3 finalPos = glm::vec3(aux / aux.w);
   try {
-    std::array<int, 2> IDs = lightIDs.at(light.name);
+    const std::array<int, 2> &IDs = lightIDs.at(light.name);
     setUnif(IDs[POS_ID], finalPos);
   } catch (const std::out_of_range &oor) {
     std::cerr << "Setting light position before calling setLight()\n";
@@ -155,7 +156,7 @@ void Shader::setLightPos(const Light &light, const glm::mat4 &transform) const {
 void Shader::setLightDir(const Light &light,
                          const glm::mat3 &dirNormMatrix) const {
   try {
-    std::array<int, 2> IDs = lightIDs.at(light.name);
+    const std::array<int, 2> &IDs = lightIDs.at(light.name);
     setUnif(IDs[DIR_ID], dirNormMatrix * light.direction);
   } catch (const std::out_of_range &oor) {
     std::cerr << "Setting light direction before calling setLight()\n";

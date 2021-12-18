@@ -8,6 +8,9 @@ uniform vec3 viewPos;
 uniform vec3 dirLightDir;
 uniform vec3 spotLightPos;
 uniform vec3 spotLightDir;
+uniform vec3 tubeLightPos;
+uniform vec3 tubeP0;
+uniform vec3 tubeP1;
 
 uniform mat4 model;
 uniform mat3 normMat;
@@ -15,6 +18,7 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 dirSpaceMat;
 uniform mat4 spotSpaceMat;
+uniform mat4 tubeSpaceMat;
 
 out VS_OUT {
   vec3 worldFragPos;
@@ -25,9 +29,13 @@ out VS_OUT {
   vec3 frenetLightDir;
   vec3 frenetSpotPos;
   vec3 frenetSpotDir;
+  vec3 frenetTubePos;
+  vec3 frenetP0;
+  vec3 frenetP1;
 
   vec4 fragPosDirSpace;
   vec4 fragPosSpotSpace;
+  vec4 fragPosTubeSpace;
 }
 vs_out;
 
@@ -40,6 +48,7 @@ void main() {
   // Fragment position in the view space of the lights.
   vs_out.fragPosDirSpace = dirSpaceMat * vec4(vs_out.worldFragPos, 1.0);
   vs_out.fragPosSpotSpace = spotSpaceMat * vec4(vs_out.worldFragPos, 1.0);
+  vs_out.fragPosTubeSpace = tubeSpaceMat * vec4(vs_out.worldFragPos, 1.0);
 
   // Construct tangent space matrix for normal mapping.
   vec3 T = normalize(normMat * aTangent);
@@ -55,4 +64,7 @@ void main() {
   vs_out.frenetLightDir = TBN * dirLightDir;
   vs_out.frenetSpotPos = TBN * spotLightPos;
   vs_out.frenetSpotDir = TBN * spotLightDir;
+  vs_out.frenetTubePos = TBN * tubeLightPos;
+  vs_out.frenetP0 = TBN * tubeP0;
+  vs_out.frenetP1 = TBN * tubeP1;
 }
