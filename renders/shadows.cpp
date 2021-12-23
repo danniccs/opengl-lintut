@@ -1,5 +1,6 @@
 #include "glad/glad.h"
 #include <GLFW/glfw3.h>
+
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -15,15 +16,15 @@
 #include <glm/gtx/norm.hpp>
 
 // Include stb for image loading
-#include "stb_image.h"
-
-#include "Camera.h" // Camera class
-#include "Light.h"  // Light class
-#include "Model.h"  // Model class
-#include "Shader.h" // Shader class
+#include "Camera.h"  // Camera class
+#include "Light.h"   // Light class
+#include "Model.h"   // Model class
+#include "Shader.h"  // Shader class
 #include "SimpleMesh.h"
-#include "misc_sources.h" // framebuffer size callback and input processing
-#include "texture_loader.h" // Utility function for loading textures (generates texture)
+#include "csm.h"           // Cascaded shadow map functions.
+#include "misc_sources.h"  // framebuffer size callback and input processing
+#include "stb_image.h"
+#include "texture_loader.h"  // Utility function for loading textures (generates texture)
 
 namespace fs = std::filesystem;
 fs::path shaderPath(fs::current_path() / "shaders");
@@ -54,14 +55,21 @@ void processInput(GLFWwindow *window);
 // settings
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
+const float CAMERA_NEAR = 0.1f;
+const float CAMERA_FAR = 100.0f;
 const unsigned int SHADOW_WIDTH = 1024;
 const unsigned int SHADOW_HEIGHT = 1024;
 const float SHADOW_MULT = 0.5;
 const unsigned int NUM_SEARCH_SAMPLES = 16;
 const unsigned int NUM_PCF_SAMPLES = 32;
 const unsigned int NUM_SPHERES = 4;
+const unsigned int CSM_CASCADES = 5;
 
-namespace toggles { // Only changed by input processing
+// Indexes for Uniform Buffer Objects
+const unsigned int SHADOW_UBO_INDEX = 0;
+const unsigned int DIR_CSM_UBO_INDEX = 1;
+
+namespace toggles {  // Only changed by input processing
 bool bKeyPressed = false;
 bool nKeyPressed = false;
 bool lKeyPressed = false;
@@ -72,7 +80,7 @@ bool g_showNorms{false};
 bool g_wireframe{false};
 bool g_areaLights{true};
 bool g_showTube{false};
-} // namespace toggles
+}  // namespace toggles
 
 int main() {
   glfwInit();
@@ -151,7 +159,10 @@ int main() {
     Shader lightProg((shaderPath / "light_sphere.vs").c_str(),
                      (shaderPath / "light_sphere.fs").c_str());
     Shader shadowProg((shaderPath / "shadow_map.vs").c_str(),
-                      (shaderPath / "shadow_map.fs").c_str());
+                      (shaderPath / "empty.fs").c_str());
+    Shader csmProg((shaderPath / "csm.vs").c_str(),
+                   (shaderPath / "empty.fs").c_str(),
+                   (shaderPath / "csm.gs").c_str());
 
     // Get the uniform IDs in the vertex shader
     const int sViewID = sProg.getUnif("view");
@@ -172,24 +183,24 @@ int main() {
     glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
     glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
     glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
@@ -197,6 +208,43 @@ int main() {
     glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadowMaps[0], 0);
+    // Check framebuffer status.
+    int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+      std::cout << "ERROR::FRAMEBUFFER:: Shadow framebuffer is not complete!\n";
+      throw 0;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // Create CSM framebuffer.
+    unsigned int csmFBO;
+    glGenFramebuffers(1, &csmFBO);
+    // Shadow maps.
+    unsigned int CSMs;
+    glGenTextures(1, &CSMs);
+    // Configure the shadow maps.
+    float csmBorderColor[]{1.0f, 1.0f, 1.0f, 1.0f};
+    glBindTexture(GL_TEXTURE_2D_ARRAY, CSMs);
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT16, SHADOW_WIDTH,
+                 SHADOW_HEIGHT, CSM_CASCADES, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
+                 NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, csmBorderColor);
+    // Bind the texture as the depth attachment
+    glBindFramebuffer(GL_FRAMEBUFFER, csmFBO);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CSMs, 0);
+    // Check framebuffer status.
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+      std::cout << "ERROR::FRAMEBUFFER:: CSM framebuffer is not complete!\n";
+      throw 0;
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // Create a texture with random rotations for Poisson disk sampling rotation
@@ -229,7 +277,7 @@ int main() {
     glGenBuffers(1, &shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
     size_t UBOSize =
-        32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 3 * sizeof(float);
+        32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 4 * sizeof(float);
     glBufferData(GL_UNIFORM_BUFFER, UBOSize, NULL, GL_STATIC_DRAW);
     for (unsigned int i = 0; i < 32; ++i)
       glBufferSubData(GL_UNIFORM_BUFFER, i * sizeof(glm::vec4),
@@ -245,7 +293,10 @@ int main() {
     glBufferSubData(GL_UNIFORM_BUFFER,
                     32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 8, 4,
                     &SHADOW_MULT);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 0, shadowUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER,
+                    32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 12, 4,
+                    &CSM_CASCADES);
+    glBindBufferBase(GL_UNIFORM_BUFFER, SHADOW_UBO_INDEX, shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     // Load Sphere PBR maps.
@@ -390,12 +441,13 @@ int main() {
     Light dirLight("dirLight", true);
     dirLight.cLight = glm::vec3{0.3f, 0.3f, 0.3f};
     dirLight.direction = glm::vec3{3.0f, -4.0f, 0.0f};
-    glm::mat4 dirView =
-        glm::lookAt(-dirLight.direction, glm::vec3(0.0f, 0.0f, 0.0f),
-                    glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 dirProjection =
-        glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.1f, 50.0f);
-    glm::mat4 dirSpaceMat = dirProjection * dirView;
+    unsigned int dirCSMUBO;
+    glGenBuffers(1, &dirCSMUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, dirCSMUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * CSM_CASCADES, nullptr,
+                 GL_STATIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, DIR_CSM_UBO_INDEX, dirCSMUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
     // Set spotlight attributes.
     float cutOff = -1.0f;
@@ -502,7 +554,6 @@ int main() {
     floorProg.setLightPos(tubeLight, glm::mat4(1.0f));
 
     while (!glfwWindowShouldClose(window)) {
-
       currentFrame = static_cast<float>(glfwGetTime());
       deltaTime = currentFrame - lastFrame;
       lastFrame = currentFrame;
@@ -523,11 +574,43 @@ int main() {
       */
       // Update the camera view
       view = cam.GetViewMatrix();
-      // Create a matrix to maintain directions in view space
-      glm::mat3 dirNormMat(glm::transpose(glm::inverse(view)));
       // Update the projection matrix
-      projection = glm::perspective(glm::radians(cam.Zoom), 800.0f / 600.0f,
-                                    0.1f, 100.0f);
+      const float aspect =
+          static_cast<float>(SCR_WIDTH) / static_cast<float>(SCR_HEIGHT);
+      projection = glm::perspective(glm::radians(cam.Zoom), aspect, CAMERA_NEAR,
+                                    CAMERA_FAR);
+
+      // Obtain the cascaded shadow maps.
+      {
+        glBindFramebuffer(GL_FRAMEBUFFER, csmFBO);
+        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+
+        std::vector<glm::mat4> dirCSMMats =
+            cascades::fitOrtho(projection * view, CSM_CASCADES, dirLight,
+                               SHADOW_WIDTH * SHADOW_HEIGHT);
+        glBindBuffer(GL_UNIFORM_BUFFER, dirCSMUBO);
+        for (size_t i = 0; i < dirCSMMats.size(); ++i) {
+          glBufferSubData(GL_UNIFORM_BUFFER, i * sizeof(glm::mat4),
+                          sizeof(glm::mat4), &(dirCSMMats[i]));
+        }
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CSMs, 0);
+
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glCullFace(GL_FRONT);
+
+        csmProg.use();
+
+        for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
+          csmProg.setUnifS("model", sphereModelMats[i]);
+          sphere.Draw(csmProg, 1, nullptr, nullptr);
+        }
+        csmProg.setUnifS("model", boulderModelMat);
+        boulder.Draw(csmProg, 1, nullptr, nullptr);
+
+        glCullFace(GL_BACK);
+      }
 
       // Do a first pass to obtain the shadow maps
       {
@@ -535,19 +618,6 @@ int main() {
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 
         glCullFace(GL_FRONT);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                               GL_TEXTURE_2D, shadowMaps[0], 0);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        shadowProg.use();
-        shadowProg.setUnifS("lightSpaceMatrix", dirSpaceMat);
-
-        for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
-          shadowProg.setUnifS("model", sphereModelMats[i]);
-          sphere.Draw(shadowProg, 1, nullptr, nullptr);
-        }
-        shadowProg.setUnifS("model", boulderModelMat);
-        boulder.Draw(shadowProg, 1, nullptr, nullptr);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                GL_TEXTURE_2D, shadowMaps[1], 0);
@@ -590,7 +660,6 @@ int main() {
           floorProg.setUnifS("viewPos", cam.Position);
           floorProg.setUnif(floorViewID, view);
           floorProg.setUnif(floorProjID, projection);
-          floorProg.setUnifS("dirSpaceMat", dirSpaceMat);
           floorProg.setUnifS("spotSpaceMat", spotSpaceMat);
           floorProg.setUnifS("tubeSpaceMat", tubeSpaceMat);
 
@@ -629,7 +698,6 @@ int main() {
           sProg.setUnifS("viewPos", cam.Position);
           sProg.setUnif(sViewID, view);
           sProg.setUnif(sProjID, projection);
-          sProg.setUnifS("dirSpaceMat", dirSpaceMat);
           sProg.setUnifS("spotSpaceMat", spotSpaceMat);
           sProg.setUnifS("tubeSpaceMat", tubeSpaceMat);
 
@@ -713,7 +781,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
   double xoffset = xpos - lastX;
   double yoffset =
-      lastY - ypos; // reversed since y-coordinates range from bottom to top
+      lastY - ypos;  // reversed since y-coordinates range from bottom to top
   lastX = (xpos);
   lastY = (ypos);
 

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef STRUCTURES_H
+#define STRUCTURES_H
 
 #include <glm/glm.hpp>
 #include <string>
@@ -49,3 +50,5 @@ struct Material {
   unsigned int emisId;
   unsigned int shinId;
 };
+
+#endif

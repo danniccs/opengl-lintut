@@ -1,5 +1,5 @@
 # opengl-lintut
-Implementation of shadow mapping and PBR with area lights using OpenGL.
+Implementation of Cascaded Shadow Maps with PCSS and PBR with area lights using OpenGL.
 
 ### Requirements
 Requires:
@@ -32,6 +32,5 @@ foo@bar:~/openg-lintut/build$ ./gltut
 ```
 ### Controls
 Use WASD to move around, move up with Space and down with C.
-To switch between a tube light and sphere light, press T. When rendering with a sphere light, press P to toggle between
-a point light and area light approximation.
+To switch between a tube light and sphere light, press T. When rendering with a sphere light, press P to toggle between a point light and area light approximation.
 Press L to toggle wireframe rendering on/off.

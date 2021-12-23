@@ -44,6 +44,7 @@ layout(std140, binding = 0) uniform shadowBlock {
   int NUM_SEARCH_SAMPLES;
   int NUM_PCF_SAMPLES;
   float shadowMult;
+  int NUM_CSM_LEVELS;
 };
 
 uniform Light dirLight;

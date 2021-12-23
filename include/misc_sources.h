@@ -45,6 +45,7 @@ extern const glm::vec3 cubePositions[2];
 extern const glm::vec3 grassCoordinates[5];
 
 extern const glm::vec2 poissonDisk[32];
+
 } // namespace sources
 
 #endif

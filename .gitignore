@@ -45,3 +45,6 @@ gltut
 
 # PBR textures
 /resources/pbr_textures/*
+
+# Cache directory
+/.cache/*

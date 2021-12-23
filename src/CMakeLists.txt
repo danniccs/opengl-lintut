@@ -8,6 +8,7 @@ target_sources(srclib
         SimpleMesh.cpp
         stb_img_implementation.cpp
         texture_loader.cpp
+        csm.cpp
 )
 
 target_include_directories(srclib
