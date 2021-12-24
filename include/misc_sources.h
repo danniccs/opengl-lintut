@@ -14,6 +14,10 @@ void printMatrix(glm::mat4 matrix);
 
 void printMatrix(glm::mat3 matrix);
 
+void printVector(glm::vec3 v);
+
+void printVector(glm::vec4 v);
+
 extern const glm::vec3 pointLightPositions[4];
 
 extern const float pointLightAttenuationValues[4][3];

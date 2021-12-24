@@ -86,6 +86,20 @@ void sources::printMatrix(glm::mat3 matrix) {
     }
 }
 
+void sources::printVector(glm::vec3 v) {
+    for (unsigned int i = 0; i < 3; ++i) {
+        std::cout << v[i] << '\t';
+    }
+    std::cout << '\n';
+}
+
+void sources::printVector(glm::vec4 v) {
+    for (unsigned int i = 0; i < 4; ++i) {
+        std::cout << v[i] << '\t';
+    }
+    std::cout << '\n';
+}
+
 const glm::vec3 sources::pointLightPositions[4] {
     glm::vec3(0.7f,  0.2f,  2.0f),
     glm::vec3(2.3f, -3.3f, -4.0f),

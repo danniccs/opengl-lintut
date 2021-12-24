@@ -7,7 +7,7 @@ using namespace std;
 
 Mesh::Mesh(vector<Vertex> vertices, vector<unsigned int> indices,
            vector<Texture> textures, Material materials)
-    : VBOs(), simpId(0) {
+    : VBOs() {
   this->vertices = vertices;
   this->indices = indices;
   this->textures = textures;
@@ -45,14 +45,6 @@ void Mesh::Draw(Shader shader, unsigned int numInstances, glm::mat4 *models,
       else
         glBindTexture(GL_TEXTURE_CUBE_MAP, textures[i].id);
     }
-    shader.setUnif(simpId, false);
-  } else {
-    shader.setUnif(simpId, true);
-    shader.setUnif(material.ambId, material.Ambient);
-    shader.setUnif(material.diffId, material.Diffuse);
-    shader.setUnif(material.specId, material.Specular);
-    shader.setUnif(material.emisId, material.Emissive);
-    shader.setUnif(material.shinId, material.Shininess);
   }
 
   // draw mesh
@@ -94,14 +86,7 @@ void Mesh::getTextureLocations(Shader shader) {
       }
       textures[i].location = shader.getUnif(mat + name + number);
     }
-  } else {
-    material.ambId = shader.getUnif(mat + "simpleAmbient");
-    material.diffId = shader.getUnif(mat + "simpleDiffuse");
-    material.specId = shader.getUnif(mat + "simpleSpecular");
-    material.emisId = shader.getUnif(mat + "simpleEmissive");
-    material.shinId = shader.getUnif(mat + "shininess");
   }
-  simpId = shader.getUnif(mat + "isSimple");
 }
 
 void Mesh::setupMesh() {

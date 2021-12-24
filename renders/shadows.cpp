@@ -63,7 +63,7 @@ const float SHADOW_MULT = 0.5;
 const unsigned int NUM_SEARCH_SAMPLES = 16;
 const unsigned int NUM_PCF_SAMPLES = 32;
 const unsigned int NUM_SPHERES = 4;
-const unsigned int CSM_CASCADES = 5;
+const unsigned int NUM_CSM_FRUSTA = 3;
 
 // Indexes for Uniform Buffer Objects
 const unsigned int SHADOW_UBO_INDEX = 0;
@@ -163,6 +163,8 @@ int main() {
     Shader csmProg((shaderPath / "csm.vs").c_str(),
                    (shaderPath / "empty.fs").c_str(),
                    (shaderPath / "csm.gs").c_str());
+    Shader frustProg((shaderPath / "frust.vs").c_str(),
+                     (shaderPath / "frust.fs").c_str());
 
     // Get the uniform IDs in the vertex shader
     const int sViewID = sProg.getUnif("view");
@@ -221,24 +223,25 @@ int main() {
     unsigned int csmFBO;
     glGenFramebuffers(1, &csmFBO);
     // Shadow maps.
-    unsigned int CSMs;
-    glGenTextures(1, &CSMs);
+    unsigned int CSM;
+    glGenTextures(1, &CSM);
     // Configure the shadow maps.
     float csmBorderColor[]{1.0f, 1.0f, 1.0f, 1.0f};
-    glBindTexture(GL_TEXTURE_2D_ARRAY, CSMs);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
     glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT16, SHADOW_WIDTH,
-                 SHADOW_HEIGHT, CSM_CASCADES, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
-                 NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, csmBorderColor);
+                 SHADOW_HEIGHT, NUM_CSM_FRUSTA, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameterfv(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BORDER_COLOR,
+                     csmBorderColor);
     // Bind the texture as the depth attachment
     glBindFramebuffer(GL_FRAMEBUFFER, csmFBO);
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CSMs, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CSM, 0);
     // Check framebuffer status.
     status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -273,29 +276,40 @@ int main() {
 
     // Create a UBO for global shadow information and bind it.
     glm::vec2 shadowTexelSize(1.0f / SHADOW_WIDTH, 1.0f / SHADOW_HEIGHT);
+    std::vector<float> cascadePlaneDistances =
+        cascades::getCSMPlaneDistances(NUM_CSM_FRUSTA, CAMERA_FAR);
     unsigned int shadowUBO;
     glGenBuffers(1, &shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
-    size_t UBOSize =
-        32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 4 * sizeof(float);
+    size_t UBOSize = 32 * sizeof(glm::vec4);
+    UBOSize += cascadePlaneDistances.size() * sizeof(glm::vec4);
+    UBOSize += sizeof(glm::vec2) + 4 * sizeof(float) + 8;
     glBufferData(GL_UNIFORM_BUFFER, UBOSize, NULL, GL_STATIC_DRAW);
     for (unsigned int i = 0; i < 32; ++i)
       glBufferSubData(GL_UNIFORM_BUFFER, i * sizeof(glm::vec4),
                       sizeof(glm::vec2), &sources::poissonDisk[i]);
-    glBufferSubData(GL_UNIFORM_BUFFER, 32 * sizeof(glm::vec4),
+    for (unsigned int i = 0; i < NUM_CSM_FRUSTA; ++i)
+      glBufferSubData(GL_UNIFORM_BUFFER, (32 + i) * sizeof(glm::vec4),
+                      sizeof(float), &cascadePlaneDistances[i]);
+    glBufferSubData(GL_UNIFORM_BUFFER,
+                    (32 + NUM_CSM_FRUSTA) * sizeof(glm::vec4),
                     sizeof(glm::vec2), &shadowTexelSize);
-    glBufferSubData(GL_UNIFORM_BUFFER,
-                    32 * sizeof(glm::vec4) + sizeof(glm::vec2), 4,
-                    &NUM_SEARCH_SAMPLES);
-    glBufferSubData(GL_UNIFORM_BUFFER,
-                    32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 4, 4,
-                    &NUM_PCF_SAMPLES);
-    glBufferSubData(GL_UNIFORM_BUFFER,
-                    32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 8, 4,
-                    &SHADOW_MULT);
-    glBufferSubData(GL_UNIFORM_BUFFER,
-                    32 * sizeof(glm::vec4) + sizeof(glm::vec2) + 12, 4,
-                    &CSM_CASCADES);
+    glBufferSubData(
+        GL_UNIFORM_BUFFER,
+        (32 + NUM_CSM_FRUSTA) * sizeof(glm::vec4) + sizeof(glm::vec2), 4,
+        &NUM_SEARCH_SAMPLES);
+    glBufferSubData(
+        GL_UNIFORM_BUFFER,
+        (32 + NUM_CSM_FRUSTA) * sizeof(glm::vec4) + sizeof(glm::vec2) + 4, 4,
+        &NUM_PCF_SAMPLES);
+    glBufferSubData(
+        GL_UNIFORM_BUFFER,
+        (32 + NUM_CSM_FRUSTA) * sizeof(glm::vec4) + sizeof(glm::vec2) + 8, 4,
+        &SHADOW_MULT);
+    glBufferSubData(
+        GL_UNIFORM_BUFFER,
+        (32 + NUM_CSM_FRUSTA) * sizeof(glm::vec4) + sizeof(glm::vec2) + 12, 4,
+        &NUM_CSM_FRUSTA);
     glBindBufferBase(GL_UNIFORM_BUFFER, SHADOW_UBO_INDEX, shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
@@ -444,7 +458,7 @@ int main() {
     unsigned int dirCSMUBO;
     glGenBuffers(1, &dirCSMUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, dirCSMUBO);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * CSM_CASCADES, nullptr,
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * NUM_CSM_FRUSTA, nullptr,
                  GL_STATIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, DIR_CSM_UBO_INDEX, dirCSMUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
@@ -465,7 +479,7 @@ int main() {
     float aspect =
         static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
     glm::mat4 spotProjection =
-        glm::perspective(outerRadians, aspect, 1.0f, 20.0f);
+        glm::perspective(outerRadians, aspect, 0.1f, 10.0f);
     glm::mat4 spotView = glm::lookAt(spotLight.position,
                                      spotLight.position + spotLight.direction,
                                      glm::vec3(0.0f, 1.0f, 0.0f));
@@ -487,7 +501,7 @@ int main() {
         glm::translate(glm::mat4(1.0f), tubeLight.position);
     */
     glm::mat4 tubeProjection =
-        glm::perspective(glm::radians(90.0f), aspect, 1.0f, 20.0f);
+        glm::perspective(glm::radians(20.0f), aspect, 0.1f, 10.0f);
     glm::mat4 tubeView = glm::lookAt(tubeLight.position, glm::vec3(0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 tubeSpaceMat = tubeProjection * tubeView;
@@ -502,7 +516,7 @@ int main() {
 
     // Set indices for textures.
     sProg.use();
-    sProg.setUnifS("shadowMap", 0);
+    sProg.setUnifS("dirCSM", 0);
     sProg.setUnifS("spotShadowMap", 1);
     sProg.setUnifS("tubeShadowMap", 2);
     sProg.setUnifS("randomAngles", 3);
@@ -521,7 +535,7 @@ int main() {
     sProg.setUnifS("tubeP1", tubeP1);
 
     floorProg.use();
-    floorProg.setUnifS("shadowMap", 0);
+    floorProg.setUnifS("dirCSM", 0);
     floorProg.setUnifS("spotShadowMap", 1);
     floorProg.setUnifS("tubeShadowMap", 2);
     floorProg.setUnifS("randomAngles", 3);
@@ -553,6 +567,67 @@ int main() {
     floorProg.setLightDir(spotLight, glm::mat4(1.0f));
     floorProg.setLightPos(tubeLight, glm::mat4(1.0f));
 
+    unsigned int VAO;
+    unsigned int VBO;
+    // Create vertex array object
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+    // Create several vertex buffer object
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    const float fCubeVertices[108]{
+        // Back face                         Orientation when looking straight
+        // at the face
+        -1.0f, -1.0f, -1.0f,  // Bottom-right
+        -1.0f, 1.0f, -1.0f,   // top-right
+        1.0f, 1.0f, -1.0f,    // top-left
+        1.0f, 1.0f, -1.0f,    // top-left
+        1.0f, -1.0f, -1.0f,   // bottom-left
+        -1.0f, -1.0f, -1.0f,  // bottom-right
+        // Front face
+        -1.0f, -1.0f, 1.0f,  // bottom-left
+        1.0f, -1.0f, 1.0f,   // bottom-right
+        1.0f, 1.0f, 1.0f,    // top-right
+        1.0f, 1.0f, 1.0f,    // top-right
+        -1.0f, 1.0f, 1.0f,   // top-left
+        -1.0f, -1.0f, 1.0f,  // bottom-left
+        // Left face
+        -1.0f, 1.0f, 1.0f,    // top-right
+        -1.0f, 1.0f, -1.0f,   // top-left
+        -1.0f, -1.0f, -1.0f,  // bottom-left
+        -1.0f, -1.0f, -1.0f,  // bottom-left
+        -1.0f, -1.0f, 1.0f,   // bottom-right
+        -1.0f, 1.0f, 1.0f,    // top-right
+                              // Right face
+        1.0f, 1.0f, 1.0f,     // top-left
+        1.0f, -1.0f, -1.0f,   // bottom-right
+        1.0f, 1.0f, -1.0f,    // top-right
+        1.0f, -1.0f, -1.0f,   // bottom-right
+        1.0f, 1.0f, 1.0f,     // top-left
+        1.0f, -1.0f, 1.0f,    // bottom-left
+        // Bottom face
+        -1.0f, -1.0f, -1.0f,  // top-right
+        1.0f, -1.0f, -1.0f,   // top-left
+        1.0f, -1.0f, 1.0f,    // bottom-left
+        1.0f, -1.0f, 1.0f,    // bottom-left
+        -1.0f, -1.0f, 1.0f,   // bottom-right
+        -1.0f, -1.0f, -1.0f,  // top-right
+        // Top face
+        -1.0f, 1.0f, -1.0f,  // top-left
+        1.0f, 1.0f, 1.0f,    // bottom-right
+        1.0f, 1.0f, -1.0f,   // top-right
+        1.0f, 1.0f, 1.0f,    // bottom-right
+        -1.0f, 1.0f, -1.0f,  // top-left
+        -1.0f, 1.0f, 1.0f,   // bottom-left
+    };
+    glBufferData(GL_ARRAY_BUFFER, 108 * sizeof(float), fCubeVertices,
+                 GL_STATIC_DRAW);
+
+    // Bind the objects, tell them how the data is read and bind some data
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float),
+                          (void *)0);
+
     while (!glfwWindowShouldClose(window)) {
       currentFrame = static_cast<float>(glfwGetTime());
       deltaTime = currentFrame - lastFrame;
@@ -579,15 +654,15 @@ int main() {
           static_cast<float>(SCR_WIDTH) / static_cast<float>(SCR_HEIGHT);
       projection = glm::perspective(glm::radians(cam.Zoom), aspect, CAMERA_NEAR,
                                     CAMERA_FAR);
+      std::vector<glm::mat4> dirCSMMats =
+          cascades::fitOrtho(projection * view, NUM_CSM_FRUSTA, dirLight,
+                             SHADOW_WIDTH * SHADOW_HEIGHT);
 
       // Obtain the cascaded shadow maps.
       {
         glBindFramebuffer(GL_FRAMEBUFFER, csmFBO);
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 
-        std::vector<glm::mat4> dirCSMMats =
-            cascades::fitOrtho(projection * view, CSM_CASCADES, dirLight,
-                               SHADOW_WIDTH * SHADOW_HEIGHT);
         glBindBuffer(GL_UNIFORM_BUFFER, dirCSMUBO);
         for (size_t i = 0; i < dirCSMMats.size(); ++i) {
           glBufferSubData(GL_UNIFORM_BUFFER, i * sizeof(glm::mat4),
@@ -595,21 +670,20 @@ int main() {
         }
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
-        glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CSMs, 0);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_TEXTURE_2D_ARRAY, CSM, 0);
 
         glClear(GL_DEPTH_BUFFER_BIT);
-        glCullFace(GL_FRONT);
 
         csmProg.use();
 
+        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           csmProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(csmProg, 1, nullptr, nullptr);
         }
+        glCullFace(GL_BACK);
         csmProg.setUnifS("model", boulderModelMat);
         boulder.Draw(csmProg, 1, nullptr, nullptr);
-
-        glCullFace(GL_BACK);
       }
 
       // Do a first pass to obtain the shadow maps
@@ -617,17 +691,19 @@ int main() {
         glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 
-        glCullFace(GL_FRONT);
-
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                GL_TEXTURE_2D, shadowMaps[1], 0);
         glClear(GL_DEPTH_BUFFER_BIT);
+
+        shadowProg.use();
         shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
 
+        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           shadowProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(shadowProg, 1, nullptr, nullptr);
         }
+        glCullFace(GL_BACK);
         shadowProg.setUnifS("model", boulderModelMat);
         boulder.Draw(shadowProg, 1, nullptr, nullptr);
 
@@ -636,17 +712,17 @@ int main() {
         glClear(GL_DEPTH_BUFFER_BIT);
         shadowProg.setUnifS("lightSpaceMatrix", tubeSpaceMat);
 
+        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           shadowProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(shadowProg, 1, nullptr, nullptr);
         }
+        glCullFace(GL_BACK);
         shadowProg.setUnifS("model", boulderModelMat);
         boulder.Draw(shadowProg, 1, nullptr, nullptr);
-
-        glCullFace(GL_BACK);
       }
 
-      // Second pass.
+      // Draw pass.
       {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
@@ -669,7 +745,7 @@ int main() {
 
           // Floor Maps
           glActiveTexture(GL_TEXTURE0);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
+          glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
           glActiveTexture(GL_TEXTURE1);
           glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE2);
@@ -706,7 +782,7 @@ int main() {
           sProg.setUnifS("showTube", toggles::g_showTube);
 
           glActiveTexture(GL_TEXTURE0);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
+          glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
           glActiveTexture(GL_TEXTURE1);
           glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE2);
@@ -755,6 +831,13 @@ int main() {
         lightProg.setUnifS("model", lightSphereModel);
         lightProg.setUnifS("color", spotLight.cLight);
         sphere.Draw(lightProg, 1, nullptr, nullptr);
+
+        glCullFace(GL_FRONT);
+        frustProg.use();
+        frustProg.setUnifS("VPI",
+                           projection * view * glm::inverse(tubeSpaceMat));
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 108);
       }
 
       // buffer swap and event poll

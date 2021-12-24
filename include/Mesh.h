@@ -17,7 +17,6 @@ public:
   std::vector<unsigned int> indices;
   std::vector<Texture> textures;
   Material material;
-  unsigned int simpId;
   // Functions
   Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices,
        std::vector<Texture> textures, Material material);

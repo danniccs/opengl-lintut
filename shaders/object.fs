@@ -2,6 +2,7 @@
 
 in VS_OUT {
   vec3 worldFragPos;
+  vec4 viewFragPos;
   vec2 texCoords;
 
   vec3 frenetFragPos;
@@ -12,18 +13,14 @@ in VS_OUT {
   vec3 frenetTubePos;
   vec3 frenetP0;
   vec3 frenetP1;
-
-  vec4 fragPosDirSpace;
-  vec4 fragPosSpotSpace;
-  vec4 fragPosTubeSpace;
 }
 fs_in;
 
 struct Light {
   vec3 position;
   vec3 direction;
-  float cutOff;      // max angle at which it gives full light
-  float outerCutOff; // max angle at which it gives any light
+  float cutOff;       // max angle at which it gives full light
+  float outerCutOff;  // max angle at which it gives any light
   bool directional;
   float width;
   float len;
@@ -40,17 +37,22 @@ struct Light {
 
 layout(std140, binding = 0) uniform shadowBlock {
   vec2 poissonDisk[32];
+  float cascadePlaneDistances[3];
   vec2 shadowTexelSize;
   int NUM_SEARCH_SAMPLES;
   int NUM_PCF_SAMPLES;
   float shadowMult;
-  int NUM_CSM_LEVELS;
+  int NUM_CSM_FRUSTA;
 };
+
+layout(std140, binding = 1) uniform CSMBlock { mat4 dirLightSpaceMatrices[3]; };
+uniform mat4 spotSpaceMat;
+uniform mat4 tubeSpaceMat;
 
 uniform Light dirLight;
 uniform Light spotLight;
 uniform Light tubeLight;
-uniform sampler2D shadowMap;
+uniform sampler2DArray dirCSM;
 uniform sampler2D spotShadowMap;
 uniform sampler2D tubeShadowMap;
 uniform sampler2D randomAngles;
@@ -208,7 +210,6 @@ float sphereGGXNDF(vec3 n, vec3 m, float roughness, float radius, float d) {
 
 vec3 calcSphereLambert(Light light, vec3 frenetLightDir, vec3 v, vec3 l,
                        vec3 F0, vec3 albedo, float metallic, float ndotl) {
-
   float radius = light.width / 2.0;
   float d = length(light.position - fs_in.worldFragPos);
   // Calculate the color of light at the fragment.
@@ -234,7 +235,6 @@ vec3 calcSphereLambert(Light light, vec3 frenetLightDir, vec3 v, vec3 l,
 vec3 calcSphereGlossy(Light light, vec3 frenetLightDir, vec3 frenetLightPos,
                       vec3 n, vec3 v, vec3 F0, float roughness, vec3 albedo,
                       float metallic, float ndotv) {
-
   float radius = light.width / 2.0;
 
   // Calculate a new light vector.
@@ -332,7 +332,6 @@ vec3 calcTubeLambert(Light light, vec3 frenetP0, vec3 frenetP1, vec3 n, vec3 v,
 vec3 calcTubeGlossy(Light light, vec3 frenetP0, vec3 frenetP1, vec3 n, vec3 v,
                     vec3 F0, float roughness, vec3 albedo, float metallic,
                     float ndotv) {
-
   float radius = light.width / 2.0;
   vec3 r = reflect(-v, n);
 
@@ -412,6 +411,31 @@ float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
   return blockerDepth /= numBlockers;
 }
 
+float estimateBlockerDepthCSM(vec3 projCoords, Light light, sampler2DArray CSM,
+                              int layer, vec2 rotation[MAX_NUM_SAMPLES]) {
+  // Calculate size of blocker search
+  float searchWidth = max(light.width, light.len) * projCoords.z;
+
+  // Calculate average blocker depth
+  float blockerDepth = 0.0;
+  int numBlockers = 0;
+
+  for (int i = 0; i < NUM_SEARCH_SAMPLES; ++i) {
+    vec2 offset = vec2(
+        poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
+        poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
+    vec3 CSMCoord = vec3(
+        projCoords.xy + offset * shadowTexelSize * searchWidth * shadowMult,
+        layer);
+    float depth = texture(CSM, CSMCoord).r;
+    if (depth < projCoords.z) {
+      blockerDepth += depth;
+      ++numBlockers;
+    }
+  }
+  return blockerDepth /= numBlockers;
+}
+
 float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
   // perform perspective divide
   vec3 projCoords = pos.xyz / pos.w;
@@ -421,7 +445,6 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
   float shadow = 0.0;
   // Check if fragment is beyond far plane of frustum
   if (projCoords.z <= 1.0) {
-
     // Get random coordinates to rotate poisson disk
     vec2 rotation[MAX_NUM_SAMPLES];
     for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
@@ -437,23 +460,22 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
 
     // Use PCF to calculate shadow value
     if (blockerDepth > 0.0) {
-      float wPenumbra =
-          ((projCoords.z - blockerDepth) * light.width / blockerDepth) * 200.0;
+      float wPenumbra = ((projCoords.z - blockerDepth) *
+                         max(light.width, light.len) / blockerDepth) *
+                        200.0;
 
       // For Poisson disk inner sampling
       vec2 innerOffset[4];
       for (int j = 0; j < 4; j++) {
-        innerOffset[j] = vec2(poissonDisk[j].x * rotation[j].x -
-                                  poissonDisk[j].y * rotation[j].y,
-                              poissonDisk[j].x * rotation[j].y +
-                                  poissonDisk[j].y * rotation[j].x);
+        innerOffset[j] = vec2(
+            poissonDisk[j].x * rotation[j].x - poissonDisk[j].y * rotation[j].y,
+            poissonDisk[j].x * rotation[j].y + poissonDisk[j].y * rotation[j].x);
       }
 
       for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
-        vec2 offset = vec2(poissonDisk[i].x * rotation[i].x -
-                               poissonDisk[i].y * rotation[i].y,
-                           poissonDisk[i].x * rotation[i].y +
-                               poissonDisk[i].y * rotation[i].x);
+        vec2 offset = vec2(
+            poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
+            poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
         vec2 sampleCenter =
             projCoords.xy + offset * shadowTexelSize * wPenumbra * shadowMult;
 
@@ -461,6 +483,67 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
         for (int j = 0; j < 4; ++j) {
           float depth =
               texture(map, sampleCenter + innerOffset[j] * shadowTexelSize).r;
+          shadow += depth < projCoords.z ? 0.0 : 1.0;
+        }
+      }
+      shadow /= (NUM_PCF_SAMPLES * 4.0);
+    } else
+      shadow = 1.0;
+  } else
+    shadow = 1.0;
+
+  return shadow;
+}
+
+float CSMCalculation(vec4 pos, float ndotl, sampler2DArray CSM, int layer,
+                     Light light) {
+  // perform perspective divide
+  vec3 projCoords = pos.xyz / pos.w;
+  // transform to [0,1] range
+  projCoords = projCoords * 0.5 + 0.5;
+
+  float shadow = 0.0;
+  // Check if fragment is beyond far plane of frustum
+  if (projCoords.z <= 1.0) {
+    // Get random coordinates to rotate poisson disk
+    vec2 rotation[MAX_NUM_SAMPLES];
+    for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
+      vec2 angleTexCoords = fract(fs_in.worldFragPos.xz * i);
+      rotation[i] = texture(randomAngles, angleTexCoords).rg;
+    }
+
+    float bias = max(0.05 * (1.0 - ndotl), 0.005);
+    projCoords.z -= bias;
+
+    // Estimate average blocker depth
+    float blockerDepth =
+        estimateBlockerDepthCSM(projCoords, light, CSM, layer, rotation);
+
+    // Use PCF to calculate shadow value
+    if (blockerDepth > 0.0) {
+      float wPenumbra =
+          ((projCoords.z - blockerDepth) * light.width / blockerDepth) * 200.0;
+
+      // For Poisson disk inner sampling
+      vec2 innerOffset[4];
+      for (int j = 0; j < 4; j++) {
+        innerOffset[j] = vec2(
+            poissonDisk[j].x * rotation[j].x - poissonDisk[j].y * rotation[j].y,
+            poissonDisk[j].x * rotation[j].y + poissonDisk[j].y * rotation[j].x);
+      }
+
+      for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
+        vec2 offset = vec2(
+            poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
+            poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
+        vec2 sampleCenter =
+            projCoords.xy + offset * shadowTexelSize * wPenumbra * shadowMult;
+
+        // With Poisson disk sampling (remember to divide final result by 4.0)
+        for (int j = 0; j < 4; ++j) {
+          vec3 CSMCoord = vec3(sampleCenter + innerOffset[j] * shadowTexelSize,
+                               layer);
+          float depth = texture(CSM, CSMCoord).r;
           shadow += depth < projCoords.z ? 0.0 : 1.0;
         }
       }
@@ -528,22 +611,35 @@ void main() {
   vec3 F0 = vec3(0.04);
   F0 = mix(F0, albedo, metallic);
 
+  // Select cascade layer.
+  float depthVal = abs(fs_in.viewFragPos.z);
+  int layer = 0;
+  for (int i = 0; i < NUM_CSM_FRUSTA; ++i) {
+    if (depthVal < cascadePlaneDistances[i]) {
+      layer = i;
+      break;
+    }
+  }
+
+  vec4 fragPosDirSpace =
+      dirLightSpaceMatrices[layer] * vec4(fs_in.worldFragPos, 1.0);
+  vec4 fragPosSpotSpace = spotSpaceMat * vec4(fs_in.worldFragPos, 1.0);
+  vec4 fragPosTubeSpace = tubeSpaceMat * vec4(fs_in.worldFragPos, 1.0);
+
   vec3 Lo = vec3(0.0);
 
   // Lo from directional light.
   vec3 l = normalize(-fs_in.frenetLightDir);
   float ndotl = max(dot(l, normal), 0.0);
   float shadow =
-      shadowCalculation(fs_in.fragPosDirSpace, ndotl, shadowMap, dirLight);
-  /*
+      CSMCalculation(fragPosDirSpace, ndotl, dirCSM, layer, dirLight);
   Lo += shadow * calcLight(dirLight, fs_in.frenetLightDir, normal, v, l, F0,
                            albedo, metallic, roughness, ndotl, ndotv);
-  */
 
   // Lo from spot light.
   l = normalize(fs_in.frenetSpotPos - fs_in.frenetFragPos);
   ndotl = max(dot(l, normal), 0.0);
-  shadow = shadowCalculation(fs_in.fragPosSpotSpace, ndotl, spotShadowMap,
+  shadow = shadowCalculation(fragPosSpotSpace, ndotl, spotShadowMap,
                              spotLight);
   if (showTube == false) {
     if (areaLights == true) {
@@ -561,7 +657,7 @@ void main() {
   // Lo from tube light.
   l = normalize(fs_in.frenetTubePos - fs_in.frenetFragPos);
   ndotl = max(dot(l, normal), 0.0);
-  shadow = shadowCalculation(fs_in.fragPosTubeSpace, ndotl, tubeShadowMap,
+  shadow = shadowCalculation(fragPosTubeSpace, ndotl, tubeShadowMap,
                              tubeLight);
   if (showTube == true) {
     vec3 LoTube =

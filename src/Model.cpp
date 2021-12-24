@@ -20,7 +20,7 @@ Model::Model(string path, bool bSRGB, vector<string> cubeMapPaths) {
         cubeMapPaths[0].substr(0, cubeMapPaths[0].find_first_of('/'));
     cubeTex.type = "cubeMap";
   } else {
-    cubeTex.id = 0;
+    cubeTex.id = -1;
   }
   this->bSRGB = bSRGB;
   loadModel(path);
@@ -173,7 +173,8 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene) {
         loadMaterialTextures(material, aiTextureType_HEIGHT, "normal");
     myMaterial = loadMaterial(material);
   }
-  textures.push_back(cubeTex);
+  if (cubeTex.id != -1)
+    textures.push_back(cubeTex);
 
   Mesh newMesh(vertices, indices, textures, myMaterial);
   return newMesh;
