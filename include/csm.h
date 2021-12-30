@@ -1,21 +1,27 @@
 #ifndef CSM_H
 #define CSM_H
 
+#include <array>
 #include <glm/glm.hpp>
 #include <vector>
-#include <array>
 
 #include "Light.h"
 
 namespace cascades {
 
-std::vector<glm::mat4> fitOrtho(const glm::mat4& VPMat, float cascades, Light& light,
-                                unsigned int SMSize);
+// lightMatrices must either be empty or have numCascades matrices.
+void fitOrtho(const glm::mat4 &VPMat, float numCascades, float cameraNearPlane,
+              float cameraFarPlane, const Light &light,
+              unsigned int shadowMapWidth, unsigned int shadowMapHeight,
+              std::vector<glm::mat4>& lightMatrices);
 
 std::vector<std::array<glm::vec4, 4>> getFrustumWorldCorners(
-    const glm::mat4 &VPMat, float cascades);
+    const glm::mat4 &VPMat, float numCascades, float cameraNearPlane,
+    float cameraFarPlane);
 
-std::vector<float> getCSMPlaneDistances(float cascades, float cameraFarPlane);
+std::vector<float> getCSMPlaneDistances(float numCascades,
+                                        float cameraNearPlane,
+                                        float cameraFarPlane);
 
 }  // namespace cascades
 

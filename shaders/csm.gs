@@ -1,9 +1,9 @@
 #version 430 core
 
-layout(triangles, invocations = 3) in;
+layout(triangles, invocations = 5) in;
 layout(triangle_strip, max_vertices = 3) out;
 
-layout(std140, binding = 1) uniform CSMBlock { mat4 lightSpaceMatrices[3]; };
+layout(std140, binding = 1) uniform CSMBlock { mat4 lightSpaceMatrices[5]; };
 
 void main() {
   for (int i = 0; i < 3; ++i) {

@@ -62,8 +62,8 @@ const unsigned int SHADOW_HEIGHT = 1024;
 const float SHADOW_MULT = 0.5;
 const unsigned int NUM_SEARCH_SAMPLES = 16;
 const unsigned int NUM_PCF_SAMPLES = 32;
-const unsigned int NUM_SPHERES = 4;
-const unsigned int NUM_CSM_FRUSTA = 3;
+const unsigned int NUM_SPHERES = 1;
+const unsigned int NUM_CSM_FRUSTA = 5;
 
 // Indexes for Uniform Buffer Objects
 const unsigned int SHADOW_UBO_INDEX = 0;
@@ -225,10 +225,10 @@ int main() {
     // Shadow maps.
     unsigned int CSM;
     glGenTextures(1, &CSM);
-    // Configure the shadow maps.
+    // Configure the cascaded shadow map array.
     float csmBorderColor[]{1.0f, 1.0f, 1.0f, 1.0f};
     glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
-    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT16, SHADOW_WIDTH,
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, NUM_CSM_FRUSTA, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
                  nullptr);
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -277,7 +277,7 @@ int main() {
     // Create a UBO for global shadow information and bind it.
     glm::vec2 shadowTexelSize(1.0f / SHADOW_WIDTH, 1.0f / SHADOW_HEIGHT);
     std::vector<float> cascadePlaneDistances =
-        cascades::getCSMPlaneDistances(NUM_CSM_FRUSTA, CAMERA_FAR);
+        cascades::getCSMPlaneDistances(NUM_CSM_FRUSTA, CAMERA_NEAR, CAMERA_FAR);
     unsigned int shadowUBO;
     glGenBuffers(1, &shadowUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, shadowUBO);
@@ -332,6 +332,7 @@ int main() {
         loadTexture((pbrTexturePath / (prefix + "roughness.png")).string());
     aoMaps[0] = loadTexture(
         (pbrTexturePath / "streaky-metal1-ue/streaky-metal1_ao.png").string());
+    /*
     // Streaky metal sphere.
     prefix = "streaky-metal1-ue/streaky-metal1_";
     albedoMaps[1] =
@@ -370,6 +371,7 @@ int main() {
     roughnessMaps[3] =
         loadTexture((pbrTexturePath / (prefix + "Roughness.png")).string());
     aoMaps[3] = loadTexture((pbrTexturePath / (prefix + "ao.png")).string());
+    */
 
     // Load floor PBR maps.
     prefix = "rich-brown-tile-variation-ue/rich-brown-tile-variation_";
@@ -422,9 +424,11 @@ int main() {
     // Set sphere positions.
     glm::vec3 spherePos[NUM_SPHERES]{
         glm::vec3(0.0f, 2.0f, -1.0f),
+        /*
         glm::vec3(1.0f, 2.0f, -1.0f),
         glm::vec3(1.0f, 1.0f, -1.0f),
         glm::vec3(0.0f, 1.0f, -1.0f),
+        */
     };
     glm::mat4 sphereModelMats[NUM_SPHERES];
     glm::mat3 sphereNormMats[NUM_SPHERES];
@@ -462,6 +466,8 @@ int main() {
                  GL_STATIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, DIR_CSM_UBO_INDEX, dirCSMUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    std::vector<glm::mat4> dirCSMMats;
+    dirCSMMats.reserve(NUM_CSM_FRUSTA);
 
     // Set spotlight attributes.
     float cutOff = -1.0f;
@@ -654,9 +660,10 @@ int main() {
           static_cast<float>(SCR_WIDTH) / static_cast<float>(SCR_HEIGHT);
       projection = glm::perspective(glm::radians(cam.Zoom), aspect, CAMERA_NEAR,
                                     CAMERA_FAR);
-      std::vector<glm::mat4> dirCSMMats =
-          cascades::fitOrtho(projection * view, NUM_CSM_FRUSTA, dirLight,
-                             SHADOW_WIDTH * SHADOW_HEIGHT);
+
+      cascades::fitOrtho(projection * view, NUM_CSM_FRUSTA, CAMERA_NEAR,
+                         CAMERA_FAR, dirLight, SHADOW_WIDTH, SHADOW_HEIGHT,
+                         dirCSMMats);
 
       // Obtain the cascaded shadow maps.
       {
@@ -832,12 +839,17 @@ int main() {
         lightProg.setUnifS("color", spotLight.cLight);
         sphere.Draw(lightProg, 1, nullptr, nullptr);
 
+        /*
         glCullFace(GL_FRONT);
         frustProg.use();
         frustProg.setUnifS("VPI",
                            projection * view * glm::inverse(tubeSpaceMat));
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 108);
+        frustProg.setUnifS("VPI",
+                           projection * view * glm::inverse(dirCSMMats[0]));
+        glDrawArrays(GL_TRIANGLES, 0, 108);
+        */
       }
 
       // buffer swap and event poll

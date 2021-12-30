@@ -9,102 +9,108 @@
 
 #include "misc_sources.h"
 
-const float logBase = 3.0f;
-const float initialDivisor = 2.0f;
+constexpr float weight = 0.5f;
 
-std::vector<glm::mat4> cascades::fitOrtho(const glm::mat4 &VPMat,
-                                          float cascades, Light &light,
-                                          unsigned int SMSize) {
-  std::vector<glm::mat4> lightMatrices;
-  std::vector<std::array<glm::vec4, 4>> worldCorners =
-      getFrustumWorldCorners(VPMat, cascades);
+void cascades::fitOrtho(const glm::mat4 &VPMat, float numCascades,
+                        float cameraNearPlane, float cameraFarPlane,
+                        const Light &light, unsigned int shadowMapWidth,
+                        unsigned int shadowMapHeight,
+                        std::vector<glm::mat4> &lightMatrices) {
+  float floatWidth = static_cast<float>(shadowMapWidth);
+  float floatHeight = static_cast<float>(shadowMapHeight);
 
-  for (unsigned int i = 0; i < cascades; ++i) {
-    glm::vec3 center(0.0f);
+  std::vector<std::array<glm::vec4, 4>> worldCorners = getFrustumWorldCorners(
+      VPMat, numCascades, cameraNearPlane, cameraFarPlane);
+
+  for (unsigned int i = 0; i < numCascades; ++i) {
+    glm::vec4 center(0.0f);
     for (const auto &nearCorner : worldCorners[i]) {
-      center += glm::vec3(nearCorner);
+      center += nearCorner;
     }
     for (const auto &farCorner : worldCorners[i + 1]) {
-      center += glm::vec3(farCorner);
+      center += farCorner;
     }
     center = center / 8.0f;
 
-    glm::mat4 lightView = glm::lookAt(center - 20.0f * light.direction, center,
-                                      glm::vec3(0.0f, 1.0f, 0.0f));
-    float minX = std::numeric_limits<float>::max();
-    float maxX = std::numeric_limits<float>::lowest();
-    float minY = std::numeric_limits<float>::max();
-    float maxY = std::numeric_limits<float>::lowest();
-    float minZ = std::numeric_limits<float>::max();
-    float maxZ = std::numeric_limits<float>::lowest();
-    for (const auto &corner : worldCorners[i]) {
-      glm::vec4 trf = lightView * corner;
-      minX = std::min(minX, trf.x);
-      maxX = std::max(maxX, trf.x);
-      minY = std::min(minY, trf.y);
-      maxY = std::max(maxY, trf.y);
-      minZ = std::min(minZ, trf.z);
-      maxZ = std::max(maxZ, trf.z);
+    glm::mat4 lightView =
+        glm::lookAt(glm::vec3(center) - light.direction, glm::vec3(center),
+                    glm::vec3(0.0f, 1.0f, 0.0f));
+
+    // Get the longest radius in world space
+    float radius = glm::length(center - worldCorners[i][0]);
+    for (const auto &nearCorner : worldCorners[i]) {
+      float distance = glm::length(nearCorner - center);
+      radius = glm::max(radius, distance);
     }
-    for (const auto &corner : worldCorners[i + 1]) {
-      glm::vec4 trf = lightView * corner;
-      minX = std::min(minX, trf.x);
-      maxX = std::max(maxX, trf.x);
-      minY = std::min(minY, trf.y);
-      maxY = std::max(maxY, trf.y);
-      minZ = std::min(minZ, trf.z);
-      maxZ = std::max(maxZ, trf.z);
+    for (const auto &farCorner : worldCorners[i + 1]) {
+      float distance = glm::length(farCorner - center);
+      radius = glm::max(radius, distance);
     }
+    radius = std::ceil(radius);
+    float f = (radius * 2.0f) / floatWidth;
+
+    glm::vec3 vRadius = glm::vec3(radius, radius, -radius);
+    glm::vec3 maxOrtho = glm::vec3(center) + vRadius;
+    glm::vec3 minOrtho = glm::vec3(center) - vRadius;
+    minOrtho.x = floor(minOrtho.x / f) * f;
+    minOrtho.y = floor(minOrtho.y / f) * f;
+
+    maxOrtho.x = minOrtho.x + radius * 2.0f;
+    maxOrtho.y = minOrtho.y + radius * 2.0f;
+
+    // Store the far and near planes
+    float far = maxOrtho.z;
+    float near = minOrtho.z;
 
     // Modify maxZ and minZ, due to the OpenGL coordinate system.
-    if (minZ < 0.0f) {
-      float tmp = maxZ;
-      maxZ = -minZ;
-      minZ = -tmp;
+    if (near < 0.0f) {
+      float tmp = far;
+      far = -near;
+      near = -tmp;
+    } else {
+      near = -near;
+      far = -far;
     }
-    else {
-      minZ = -minZ;
-      maxZ = -maxZ;
-    }
+
     // Move the near and far planes closer and further, respectively.
-    constexpr float zMult = 1.0f;
+    constexpr float zMult = 0.6f;
+    near -= std::abs(near) * zMult;
+    far += std::abs(far) * zMult;
+
+    glm::mat4 lightProj =
+        glm::ortho(minOrtho.x, maxOrtho.x, minOrtho.y, maxOrtho.y, near, far);
 
     /*
-    Move the X and Y values in texel sized increments to avoid shimmering
-    edges.
+    // Create the rounding matrix, by projecting the world-space origin and
+    // determining
+    // the fractional offset in texel space
+    glm::mat4 shadowMatrix = lightProj * lightView;
+    glm::vec4 shadowOrigin = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    shadowOrigin = shadowMatrix * shadowOrigin;
+    float storedW = shadowOrigin.w;
+    shadowOrigin = shadowOrigin * (floatWidth * 2.0f) / 2.0f;
+
+    glm::vec4 roundedOrigin = glm::round(shadowOrigin);
+    glm::vec4 roundOffset = roundedOrigin - shadowOrigin;
+    roundOffset = roundOffset * 2.0f / (floatWidth * 2.0f);
+    roundOffset.z = 0.0f;
+    roundOffset.w = 0.0f;
+
+    glm::mat4 shadowProj = lightProj;
+    shadowProj[3] += roundOffset;
+    lightProj = shadowProj;
     */
-    glm::vec3 boundDiagonal =
-        glm::vec3(minX, minY, minZ) - glm::vec3(maxX, maxY, maxZ);
-    float worldUnitsPerTexel = glm::length(boundDiagonal) / SMSize;
-    minX /= worldUnitsPerTexel;
-    minX = floor(minX);
-    minX *= worldUnitsPerTexel;
-    maxX /= worldUnitsPerTexel;
-    maxX = floor(maxX);
-    maxX *= worldUnitsPerTexel;
-    minY /= worldUnitsPerTexel;
-    minY = floor(minY);
-    minY *= worldUnitsPerTexel;
-    maxY /= worldUnitsPerTexel;
-    maxY = floor(maxY);
-    maxY *= worldUnitsPerTexel;
-    minZ /= worldUnitsPerTexel;
-    minZ = floor(minZ);
-    minZ *= worldUnitsPerTexel;
-    maxZ /= worldUnitsPerTexel;
-    maxZ = floor(maxZ);
-    maxZ *= worldUnitsPerTexel;
 
-    glm::mat4 lightProj = glm::ortho(minX, maxX, minY, maxY, minZ, maxZ);
-
-    lightMatrices.push_back(lightProj * lightView);
+    if (lightMatrices.size() == numCascades)
+      lightMatrices[i] = lightProj * lightView;
+    else if (lightMatrices.size() == i)
+      lightMatrices.push_back(lightProj * lightView);
   }
-
-  return lightMatrices;
 }
 
 std::vector<std::array<glm::vec4, 4>> cascades::getFrustumWorldCorners(
-    const glm::mat4 &VPMat, float cascades) {
+    const glm::mat4 &VPMat, float numCascades, float cameraNearPlane,
+    float cameraFarPlane) {
   std::vector<std::array<glm::vec4, 4>> corners;
 
   std::array<glm::vec4, 4> nearCorners;
@@ -114,32 +120,34 @@ std::vector<std::array<glm::vec4, 4>> cascades::getFrustumWorldCorners(
   const glm::mat4 VPInv = glm::inverse(VPMat);
   const float NDCCorners[]{-1.0f, 1.0f};
 
-  unsigned int vectorCounter = 0;
+  unsigned int vecIt = 0;
   for (float x : NDCCorners) {
     for (float y : NDCCorners) {
       glm::vec4 nearCorner = VPInv * glm::vec4(x, y, -1.0f, 1.0f);
       glm::vec4 farCorner = VPInv * glm::vec4(x, y, 1.0f, 1.0f);
       nearCorner = nearCorner / nearCorner.w;
       farCorner = farCorner / farCorner.w;
-      nearCorners[vectorCounter] = nearCorner;
-      farCorners[vectorCounter] = farCorner;
-      frustumVectors[vectorCounter] = farCorner - nearCorner;
-      ++vectorCounter;
+      nearCorners[vecIt] = nearCorner;
+      farCorners[vecIt] = farCorner;
+      frustumVectors[vecIt] = farCorner - nearCorner;
+      ++vecIt;
     }
   }
   corners.push_back(nearCorners);
 
   std::array<glm::vec4, 4> cascadeCorners;
-  float power = pow(logBase, static_cast<float>(cascades - 2));
-  float cascadeMultiplier = 1.0f / (initialDivisor * power);
-  for (unsigned int i = 0; i < cascades - 2; ++i) {
-    for (vectorCounter = 0; vectorCounter < 4; ++vectorCounter) {
-      glm::vec4 nextCorner = nearCorners[vectorCounter] +
-                             frustumVectors[vectorCounter] * cascadeMultiplier;
-      cascadeCorners[vectorCounter] = nextCorner;
+  for (unsigned int i = 0; i < numCascades - 1; ++i) {
+    float f = static_cast<float>(i + 1) / static_cast<float>(numCascades);
+    float logDist = cameraNearPlane * pow(cameraFarPlane / cameraNearPlane, f);
+    float uniDist = cameraNearPlane + (cameraFarPlane - cameraNearPlane) * f;
+    float splitDist = glm::mix(uniDist, logDist, weight);
+    float distRatio = splitDist / (cameraFarPlane - cameraNearPlane);
+    for (vecIt = 0; vecIt < 4; ++vecIt) {
+      glm::vec4 nextCorner =
+          nearCorners[vecIt] + frustumVectors[vecIt] * distRatio;
+      cascadeCorners[vecIt] = nextCorner;
     }
     corners.push_back(cascadeCorners);
-    cascadeMultiplier *= logBase;
   }
 
   corners.push_back(farCorners);
@@ -147,17 +155,18 @@ std::vector<std::array<glm::vec4, 4>> cascades::getFrustumWorldCorners(
   return corners;
 }
 
-std::vector<float> cascades::getCSMPlaneDistances(float cascades,
+std::vector<float> cascades::getCSMPlaneDistances(float numCascades,
+                                                  float cameraNearPlane,
                                                   float cameraFarPlane) {
   std::vector<float> cascadePlaneDistances;
-  float power = pow(logBase, static_cast<float>(cascades - 2));
-  float cascadeMultiplier = 1.0f / (initialDivisor * power);
 
-  for (unsigned int i = 0; i < cascades - 1; ++i) {
-    cascadePlaneDistances.push_back(cameraFarPlane * cascadeMultiplier);
-    cascadeMultiplier *= logBase;
+  for (unsigned int i = 0; i < numCascades; ++i) {
+    float f = static_cast<float>(i + 1) / static_cast<float>(numCascades);
+    float logDist = cameraNearPlane * pow(cameraFarPlane / cameraNearPlane, f);
+    float uniDist = cameraNearPlane + (cameraFarPlane - cameraNearPlane) * f;
+    float splitDist = glm::mix(uniDist, logDist, weight);
+    cascadePlaneDistances.push_back(splitDist);
   }
-  cascadePlaneDistances.push_back(cameraFarPlane);
 
   return cascadePlaneDistances;
 }

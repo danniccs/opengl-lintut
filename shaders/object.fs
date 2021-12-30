@@ -37,7 +37,7 @@ struct Light {
 
 layout(std140, binding = 0) uniform shadowBlock {
   vec2 poissonDisk[32];
-  float cascadePlaneDistances[3];
+  float cascadePlaneDistances[5];
   vec2 shadowTexelSize;
   int NUM_SEARCH_SAMPLES;
   int NUM_PCF_SAMPLES;
@@ -45,7 +45,7 @@ layout(std140, binding = 0) uniform shadowBlock {
   int NUM_CSM_FRUSTA;
 };
 
-layout(std140, binding = 1) uniform CSMBlock { mat4 dirLightSpaceMatrices[3]; };
+layout(std140, binding = 1) uniform CSMBlock { mat4 dirLightSpaceMatrices[5]; };
 uniform mat4 spotSpaceMat;
 uniform mat4 tubeSpaceMat;
 
@@ -452,7 +452,7 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
       rotation[i] = texture(randomAngles, angleTexCoords).rg;
     }
 
-    float bias = max(0.005 * (1.0 - ndotl), 0.005);
+    float bias = max(0.01 * (1.0 - ndotl), 0.005);
     projCoords.z -= bias;
 
     // Estimate average blocker depth
@@ -513,6 +513,7 @@ float CSMCalculation(vec4 pos, float ndotl, sampler2DArray CSM, int layer,
     }
 
     float bias = max(0.05 * (1.0 - ndotl), 0.005);
+    bias /= (cascadePlaneDistances[layer] * 0.5);
     projCoords.z -= bias;
 
     // Estimate average blocker depth
