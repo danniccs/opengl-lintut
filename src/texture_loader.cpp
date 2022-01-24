@@ -20,13 +20,13 @@ unsigned int loadTexture(string path, bool srgb, bool flip, bool flipGreen,
   unsigned char *data =
       stbi_load(path.c_str(), &width, &height, &nrComponents, 0);
 
-  // Flip green channel, useful for normal maps defined for DirectX.
-  if (flipGreen) {
-    for (int i = 0; i < width * height; ++i)
-      data[i * nrComponents + 1] = 255 - data[i * nrComponents + 1];
-  }
-
   if (data) {
+    // Flip green channel, useful for normal maps defined for DirectX.
+    if (flipGreen) {
+      for (int i = 0; i < width * height; ++i)
+        data[i * nrComponents + 1] = 255 - data[i * nrComponents + 1];
+    }
+
     GLenum iformat = GL_RGB;
     GLenum eformat = GL_RGB;
     if (nrComponents == 1)
@@ -39,11 +39,17 @@ unsigned int loadTexture(string path, bool srgb, bool flip, bool flipGreen,
     // override the format with a user-defined format
     if (srgb) {
       if (nrComponents == 3)
-        iformat = GL_SRGB;
+        iformat = GL_SRGB8;
       else if (nrComponents == 4)
-        iformat = GL_SRGB_ALPHA;
-    } else
-      iformat = eformat;
+        iformat = GL_SRGB8_ALPHA8;
+    } else {
+      if (nrComponents == 1)
+        iformat = GL_R8;
+      else if (nrComponents == 3)
+        iformat = GL_RGB8;
+      else if (nrComponents == 4)
+        iformat = GL_RGBA8;
+    }
 
     glBindTexture(GL_TEXTURE_2D, textureID);
     glTexImage2D(GL_TEXTURE_2D, 0, iformat, width, height, 0, eformat,
@@ -78,13 +84,13 @@ unsigned int loadCubeMap(vector<string> paths, bool flip, GLenum sWrap,
     unsigned char *data =
         stbi_load(paths[i].c_str(), &width, &height, &nrComponents, 0);
     if (data) {
-      GLenum format = GL_RGB;
+      GLenum format = GL_RGB16;
       if (nrComponents == 1)
         format = GL_RED;
       if (nrComponents == 3)
-        format = GL_RGB;
+        format = GL_RGB16;
       else if (nrComponents == 4)
-        format = GL_RGBA;
+        format = GL_RGBA16;
 
       glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, width, height,
                    0, format, GL_UNSIGNED_BYTE, data);

@@ -73,7 +73,9 @@ uniform bool areaLights;
 uniform bool showTube;
 
 const float PI = 3.1415926538;
+// Max samples for PCSS.
 const int MAX_NUM_SAMPLES = 64;
+const float MIN_PENUMBRA_WIDTH = 1.0;
 
 out vec4 FragColor;
 
@@ -390,7 +392,7 @@ vec3 calcTubeGlossy(Light light, vec3 frenetP0, vec3 frenetP1, vec3 n, vec3 v,
 float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
                            vec2 rotation[MAX_NUM_SAMPLES]) {
   // Calculate size of blocker search
-  float searchWidth = light.width * projCoords.z;
+  float searchWidth = max(light.width, light.len) * projCoords.z;
 
   // Calculate average blocker depth
   float blockerDepth = 0.0;
@@ -401,8 +403,7 @@ float estimateBlockerDepth(vec3 projCoords, Light light, sampler2D map,
         poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
         poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
     float depth = texture(map, projCoords.xy + offset * shadowTexelSize *
-                                                   searchWidth * shadowMult)
-                      .r;
+                               searchWidth * shadowMult).r;
     if (depth < projCoords.z) {
       blockerDepth += depth;
       ++numBlockers;
@@ -460,33 +461,21 @@ float shadowCalculation(vec4 pos, float ndotl, sampler2D map, Light light) {
 
     // Use PCF to calculate shadow value
     if (blockerDepth > 0.0) {
-      float wPenumbra = ((projCoords.z - blockerDepth) *
-                         max(light.width, light.len) / blockerDepth) *
-                        200.0;
-
-      // For Poisson disk inner sampling
-      vec2 innerOffset[4];
-      for (int j = 0; j < 4; j++) {
-        innerOffset[j] = vec2(
-            poissonDisk[j].x * rotation[j].x - poissonDisk[j].y * rotation[j].y,
-            poissonDisk[j].x * rotation[j].y + poissonDisk[j].y * rotation[j].x);
-      }
+      float wPenumbra = (projCoords.z - blockerDepth) *
+                         max(light.width, light.len) * shadowMult / blockerDepth; 
+      wPenumbra = max(wPenumbra, MIN_PENUMBRA_WIDTH);
 
       for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
         vec2 offset = vec2(
             poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
             poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
         vec2 sampleCenter =
-            projCoords.xy + offset * shadowTexelSize * wPenumbra * shadowMult;
+            projCoords.xy + offset * shadowTexelSize * wPenumbra;
 
-        // With Poisson disk sampling (remember to divide final result by 4.0)
-        for (int j = 0; j < 4; ++j) {
-          float depth =
-              texture(map, sampleCenter + innerOffset[j] * shadowTexelSize).r;
-          shadow += depth < projCoords.z ? 0.0 : 1.0;
-        }
+        float depth = texture(map, sampleCenter).r;
+        shadow += depth < projCoords.z ? 0.0 : 1.0;
       }
-      shadow /= (NUM_PCF_SAMPLES * 4.0);
+      shadow /= NUM_PCF_SAMPLES;
     } else
       shadow = 1.0;
   } else
@@ -516,39 +505,28 @@ float CSMCalculation(vec4 pos, float ndotl, sampler2DArray CSM, int layer,
     bias /= (cascadePlaneDistances[layer] * 0.5);
     projCoords.z -= bias;
 
-    // Estimate average blocker depth
+    // Estimate average blocker depth.
     float blockerDepth =
         estimateBlockerDepthCSM(projCoords, light, CSM, layer, rotation);
 
-    // Use PCF to calculate shadow value
+    // Use PCF to calculate shadow value.
     if (blockerDepth > 0.0) {
-      float wPenumbra =
-          ((projCoords.z - blockerDepth) * light.width / blockerDepth) * 200.0;
-
-      // For Poisson disk inner sampling
-      vec2 innerOffset[4];
-      for (int j = 0; j < 4; j++) {
-        innerOffset[j] = vec2(
-            poissonDisk[j].x * rotation[j].x - poissonDisk[j].y * rotation[j].y,
-            poissonDisk[j].x * rotation[j].y + poissonDisk[j].y * rotation[j].x);
-      }
+      float wPenumbra = (projCoords.z - blockerDepth) *
+                        max(light.width, light.len) * shadowMult / blockerDepth;
+      wPenumbra = max(wPenumbra, MIN_PENUMBRA_WIDTH);
 
       for (int i = 0; i < NUM_PCF_SAMPLES; ++i) {
         vec2 offset = vec2(
             poissonDisk[i].x * rotation[i].x - poissonDisk[i].y * rotation[i].y,
             poissonDisk[i].x * rotation[i].y + poissonDisk[i].y * rotation[i].x);
         vec2 sampleCenter =
-            projCoords.xy + offset * shadowTexelSize * wPenumbra * shadowMult;
+            projCoords.xy + offset * shadowTexelSize * wPenumbra;
 
-        // With Poisson disk sampling (remember to divide final result by 4.0)
-        for (int j = 0; j < 4; ++j) {
-          vec3 CSMCoord = vec3(sampleCenter + innerOffset[j] * shadowTexelSize,
-                               layer);
-          float depth = texture(CSM, CSMCoord).r;
-          shadow += depth < projCoords.z ? 0.0 : 1.0;
-        }
+        vec3 CSMCoord = vec3(sampleCenter, layer);
+        float depth = texture(CSM, CSMCoord).r;
+        shadow += depth < projCoords.z ? 0.0 : 1.0;
       }
-      shadow /= (NUM_PCF_SAMPLES * 4.0);
+      shadow /= NUM_PCF_SAMPLES;
     } else
       shadow = 1.0;
   } else

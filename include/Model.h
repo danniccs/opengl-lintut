@@ -29,7 +29,6 @@ private:
   std::vector<Mesh> meshes;
   std::unordered_map<std::string, Texture> loadedTextures;
   Texture cubeTex;
-  unsigned int cubeMapID;
   unsigned int cubeMapLoc;
   /*  Functions   */
   void buildBoundingVolume();

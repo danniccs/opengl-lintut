@@ -10,12 +10,17 @@
 #include "misc_sources.h"
 
 constexpr float weight = 0.5f;
+constexpr float g_near = 0.0f;
+constexpr float g_far = 200.0f;
+constexpr float g_extent = 100.0f;
+constexpr float g_fov = glm::radians(90.0f);
+constexpr float g_aspect = 1.0f;
 
-void cascades::fitOrtho(const glm::mat4 &VPMat, float numCascades,
-                        float cameraNearPlane, float cameraFarPlane,
-                        const Light &light, unsigned int shadowMapWidth,
-                        unsigned int shadowMapHeight,
-                        std::vector<glm::mat4> &lightMatrices) {
+void cascades::fitToFrustum(const glm::mat4 &VPMat, float numCascades,
+                            float cameraNearPlane, float cameraFarPlane,
+                            const Light &light, unsigned int shadowMapWidth,
+                            unsigned int shadowMapHeight,
+                            std::vector<glm::mat4> &lightMatrices) {
   float floatWidth = static_cast<float>(shadowMapWidth);
   float floatHeight = static_cast<float>(shadowMapHeight);
 
@@ -23,88 +28,83 @@ void cascades::fitOrtho(const glm::mat4 &VPMat, float numCascades,
       VPMat, numCascades, cameraNearPlane, cameraFarPlane);
 
   for (unsigned int i = 0; i < numCascades; ++i) {
-    glm::vec4 center(0.0f);
-    for (const auto &nearCorner : worldCorners[i]) {
-      center += nearCorner;
-    }
-    for (const auto &farCorner : worldCorners[i + 1]) {
-      center += farCorner;
-    }
-    center = center / 8.0f;
-
     glm::mat4 lightView =
-        glm::lookAt(glm::vec3(center) - light.direction, glm::vec3(center),
-                    glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::lookAt(glm::vec3(0.0f) - light.direction * 0.5f * g_far,
+                    glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-    // Get the longest radius in world space
-    float radius = glm::length(center - worldCorners[i][0]);
+    glm::mat4 lightProj;
+    if (light.directional) {
+      lightProj =
+          glm::ortho(-g_extent, g_extent, -g_extent, g_extent, g_near, g_far);
+    } else {
+      lightProj = glm::perspective(g_fov, g_aspect, g_near, g_far);
+    }
+
+    glm::mat4 lightSpaceMat = lightProj * lightView;
+
+    // Get the view frustum coordinates in light view space.
+    float minX = std::numeric_limits<float>::max();
+    float maxX = std::numeric_limits<float>::lowest();
+    float minY = std::numeric_limits<float>::max();
+    float maxY = std::numeric_limits<float>::lowest();
+    float minZ = std::numeric_limits<float>::max();
+    float maxZ = std::numeric_limits<float>::lowest();
+    glm::vec4 tmp;
+    using std::max;
+    using std::min;
     for (const auto &nearCorner : worldCorners[i]) {
-      float distance = glm::length(nearCorner - center);
-      radius = glm::max(radius, distance);
+      tmp = lightSpaceMat * nearCorner;
+      tmp = tmp / tmp.w;
+      minX = min(minX, tmp.x);
+      maxX = max(maxX, tmp.x);
+      minY = min(minY, tmp.y);
+      maxY = max(maxY, tmp.y);
+      minZ = min(minZ, tmp.z);
+      maxZ = max(maxZ, tmp.z);
     }
     for (const auto &farCorner : worldCorners[i + 1]) {
-      float distance = glm::length(farCorner - center);
-      radius = glm::max(radius, distance);
-    }
-    radius = std::ceil(radius);
-    float f = (radius * 2.0f) / floatWidth;
-
-    glm::vec3 vRadius = glm::vec3(radius, radius, -radius);
-    glm::vec3 maxOrtho = glm::vec3(center) + vRadius;
-    glm::vec3 minOrtho = glm::vec3(center) - vRadius;
-    minOrtho.x = floor(minOrtho.x / f) * f;
-    minOrtho.y = floor(minOrtho.y / f) * f;
-
-    maxOrtho.x = minOrtho.x + radius * 2.0f;
-    maxOrtho.y = minOrtho.y + radius * 2.0f;
-
-    // Store the far and near planes
-    float far = maxOrtho.z;
-    float near = minOrtho.z;
-
-    // Modify maxZ and minZ, due to the OpenGL coordinate system.
-    if (near < 0.0f) {
-      float tmp = far;
-      far = -near;
-      near = -tmp;
-    } else {
-      near = -near;
-      far = -far;
+      tmp = lightSpaceMat * farCorner;
+      tmp = tmp / tmp.w;
+      minX = min(minX, tmp.x);
+      maxX = max(maxX, tmp.x);
+      minY = min(minY, tmp.y);
+      maxY = max(maxY, tmp.y);
+      minZ = min(minZ, tmp.z);
+      maxZ = max(maxZ, tmp.z);
     }
 
     // Move the near and far planes closer and further, respectively.
-    constexpr float zMult = 0.6f;
-    near -= std::abs(near) * zMult;
-    far += std::abs(far) * zMult;
+    constexpr float zMult = 0.2f;
+    minZ -= std::abs(minZ) * zMult;
+    maxZ += std::abs(maxZ) * zMult;
 
-    glm::mat4 lightProj =
-        glm::ortho(minOrtho.x, maxOrtho.x, minOrtho.y, maxOrtho.y, near, far);
+    float scaleZ = 1.0f / (maxZ - minZ);
+    float offsetZ = -minZ * scaleZ;
 
-    /*
-    // Create the rounding matrix, by projecting the world-space origin and
-    // determining
-    // the fractional offset in texel space
-    glm::mat4 shadowMatrix = lightProj * lightView;
-    glm::vec4 shadowOrigin = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    shadowOrigin = shadowMatrix * shadowOrigin;
-    float storedW = shadowOrigin.w;
-    shadowOrigin = shadowOrigin * (floatWidth * 2.0f) / 2.0f;
+    // Approximate and quantize scale.
+    float scaleX = 2.0f / (maxX - minX);
+    float scaleY = 2.0f / (maxY - minY);
+    float scaleQuantizer = 64.0f;
+    scaleX = 1.0f / std::ceil(1.0f / scaleX * scaleQuantizer) * scaleQuantizer;
+    scaleY = 1.0f / std::ceil(1.0f / scaleY * scaleQuantizer) * scaleQuantizer;
 
-    glm::vec4 roundedOrigin = glm::round(shadowOrigin);
-    glm::vec4 roundOffset = roundedOrigin - shadowOrigin;
-    roundOffset = roundOffset * 2.0f / (floatWidth * 2.0f);
-    roundOffset.z = 0.0f;
-    roundOffset.w = 0.0f;
+    // Approximate and quantize offset.
+    float offsetX = -0.5f * (maxX + minX) * scaleX;
+    float offsetY = -0.5f * (maxY + minY) * scaleY;
+    float halfTextureX = 0.5f * floatWidth;
+    float halfTextureY = 0.5f * floatHeight;
+    offsetX = ceil(offsetX * halfTextureX) / halfTextureX;
+    offsetY = ceil(offsetY * halfTextureY) / halfTextureY;
 
-    glm::mat4 shadowProj = lightProj;
-    shadowProj[3] += roundOffset;
-    lightProj = shadowProj;
-    */
+    glm::mat4 cropMatrix(glm::vec4(scaleX, 0.0f, 0.0f, 0.0f),
+                         glm::vec4(0.0f, scaleY, 0.0f, 0.0f),
+                         glm::vec4(0.0f, 0.0f, scaleZ, 0.0f),
+                         glm::vec4(offsetX, offsetY, offsetZ, 1.0f));
 
     if (lightMatrices.size() == numCascades)
-      lightMatrices[i] = lightProj * lightView;
+      lightMatrices[i] = cropMatrix * lightSpaceMat;
     else if (lightMatrices.size() == i)
-      lightMatrices.push_back(lightProj * lightView);
+      lightMatrices.push_back(cropMatrix * lightSpaceMat);
   }
 }
 

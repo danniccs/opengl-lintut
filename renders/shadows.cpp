@@ -59,8 +59,9 @@ const float CAMERA_NEAR = 0.1f;
 const float CAMERA_FAR = 100.0f;
 const unsigned int SHADOW_WIDTH = 1024;
 const unsigned int SHADOW_HEIGHT = 1024;
-const float SHADOW_MULT = 0.5;
-const unsigned int NUM_SEARCH_SAMPLES = 16;
+const unsigned int NUM_SHADOW_MAPS = 2;
+const float SHADOW_MULT = 1.0f;
+const unsigned int NUM_SEARCH_SAMPLES = 32;
 const unsigned int NUM_PCF_SAMPLES = 32;
 const unsigned int NUM_SPHERES = 1;
 const unsigned int NUM_CSM_FRUSTA = 5;
@@ -178,8 +179,8 @@ int main() {
     unsigned int shadowFBO;
     glGenFramebuffers(1, &shadowFBO);
     // Shadow maps.
-    unsigned int shadowMaps[3];
-    glGenTextures(3, shadowMaps);
+    unsigned int shadowMaps[NUM_SHADOW_MAPS];
+    glGenTextures(NUM_SHADOW_MAPS, shadowMaps);
     // Configure the shadow maps.
     float borderColor[]{1.0f, 1.0f, 1.0f, 1.0f};
     glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
@@ -191,14 +192,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
     glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
-                 SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH,
                  SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -458,7 +451,7 @@ int main() {
     // Set the directional light attributes
     Light dirLight("dirLight", true);
     dirLight.cLight = glm::vec3{0.3f, 0.3f, 0.3f};
-    dirLight.direction = glm::vec3{3.0f, -4.0f, 0.0f};
+    dirLight.direction = glm::normalize(glm::vec3{3.0f, -4.0f, 0.0f});
     unsigned int dirCSMUBO;
     glGenBuffers(1, &dirCSMUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, dirCSMUBO);
@@ -476,7 +469,7 @@ int main() {
     Light spotLight("spotLight", false, wSphere * lightSphereScaling, 0.0f,
                     1.0f, 0.14f, 0.07f, cutOff, outerCutOff);
     spotLight.position = glm::vec3(1.0f, 3.0f, 2.0f);
-    spotLight.direction = glm::vec3(0.0f, -1.0f, -1.0f);
+    spotLight.direction = glm::normalize(glm::vec3(0.0f, -1.0f, -1.0f));
     spotLight.cLight = glm::vec3(10.0f);
     glm::mat4 lightSphereModel =
         glm::translate(glm::mat4(1.0f), spotLight.position);
@@ -485,7 +478,7 @@ int main() {
     float aspect =
         static_cast<float>(SHADOW_WIDTH) / static_cast<float>(SHADOW_HEIGHT);
     glm::mat4 spotProjection =
-        glm::perspective(outerRadians, aspect, 0.1f, 10.0f);
+        glm::perspective(outerRadians, aspect, 0.1f, 20.0f);
     glm::mat4 spotView = glm::lookAt(spotLight.position,
                                      spotLight.position + spotLight.direction,
                                      glm::vec3(0.0f, 1.0f, 0.0f));
@@ -507,7 +500,7 @@ int main() {
         glm::translate(glm::mat4(1.0f), tubeLight.position);
     */
     glm::mat4 tubeProjection =
-        glm::perspective(glm::radians(20.0f), aspect, 0.1f, 10.0f);
+        glm::perspective(glm::radians(120.0f), aspect, 0.1f, 20.0f);
     glm::mat4 tubeView = glm::lookAt(tubeLight.position, glm::vec3(0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 tubeSpaceMat = tubeProjection * tubeView;
@@ -661,9 +654,9 @@ int main() {
       projection = glm::perspective(glm::radians(cam.Zoom), aspect, CAMERA_NEAR,
                                     CAMERA_FAR);
 
-      cascades::fitOrtho(projection * view, NUM_CSM_FRUSTA, CAMERA_NEAR,
-                         CAMERA_FAR, dirLight, SHADOW_WIDTH, SHADOW_HEIGHT,
-                         dirCSMMats);
+      cascades::fitToFrustum(projection * view, NUM_CSM_FRUSTA, CAMERA_NEAR,
+                             CAMERA_FAR, dirLight, SHADOW_WIDTH, SHADOW_HEIGHT,
+                             dirCSMMats);
 
       // Obtain the cascaded shadow maps.
       {
@@ -683,12 +676,10 @@ int main() {
 
         csmProg.use();
 
-        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           csmProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(csmProg, 1, nullptr, nullptr);
         }
-        glCullFace(GL_BACK);
         csmProg.setUnifS("model", boulderModelMat);
         boulder.Draw(csmProg, 1, nullptr, nullptr);
       }
@@ -699,32 +690,28 @@ int main() {
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                               GL_TEXTURE_2D, shadowMaps[1], 0);
+                               GL_TEXTURE_2D, shadowMaps[0], 0);
         glClear(GL_DEPTH_BUFFER_BIT);
 
         shadowProg.use();
         shadowProg.setUnifS("lightSpaceMatrix", spotSpaceMat);
 
-        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           shadowProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(shadowProg, 1, nullptr, nullptr);
         }
-        glCullFace(GL_BACK);
         shadowProg.setUnifS("model", boulderModelMat);
         boulder.Draw(shadowProg, 1, nullptr, nullptr);
 
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                               GL_TEXTURE_2D, shadowMaps[2], 0);
+                               GL_TEXTURE_2D, shadowMaps[1], 0);
         glClear(GL_DEPTH_BUFFER_BIT);
         shadowProg.setUnifS("lightSpaceMatrix", tubeSpaceMat);
 
-        glCullFace(GL_FRONT);
         for (unsigned int i = 0; i < NUM_SPHERES; ++i) {
           shadowProg.setUnifS("model", sphereModelMats[i]);
           sphere.Draw(shadowProg, 1, nullptr, nullptr);
         }
-        glCullFace(GL_BACK);
         shadowProg.setUnifS("model", boulderModelMat);
         boulder.Draw(shadowProg, 1, nullptr, nullptr);
       }
@@ -754,9 +741,9 @@ int main() {
           glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
           glActiveTexture(GL_TEXTURE1);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
           glActiveTexture(GL_TEXTURE2);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE3);
           glBindTexture(GL_TEXTURE_2D, randomTexture);
           glActiveTexture(GL_TEXTURE4);
@@ -791,9 +778,9 @@ int main() {
           glActiveTexture(GL_TEXTURE0);
           glBindTexture(GL_TEXTURE_2D_ARRAY, CSM);
           glActiveTexture(GL_TEXTURE1);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[0]);
           glActiveTexture(GL_TEXTURE2);
-          glBindTexture(GL_TEXTURE_2D, shadowMaps[2]);
+          glBindTexture(GL_TEXTURE_2D, shadowMaps[1]);
           glActiveTexture(GL_TEXTURE3);
           glBindTexture(GL_TEXTURE_2D, randomTexture);
 
@@ -841,14 +828,17 @@ int main() {
 
         /*
         glCullFace(GL_FRONT);
+        glBindVertexArray(VAO);
         frustProg.use();
         frustProg.setUnifS("VPI",
                            projection * view * glm::inverse(tubeSpaceMat));
-        glBindVertexArray(VAO);
+        frustProg.setUnifS("aColor", glm::vec3(0.5f, 0.0f, 0.0f));
         glDrawArrays(GL_TRIANGLES, 0, 108);
         frustProg.setUnifS("VPI",
                            projection * view * glm::inverse(dirCSMMats[0]));
+        frustProg.setUnifS("aColor", glm::vec3(0.0f, 0.5f, 0.5f));
         glDrawArrays(GL_TRIANGLES, 0, 108);
+        glCullFace(GL_BACK);
         */
       }
 
@@ -857,7 +847,7 @@ int main() {
       glfwPollEvents();
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteTextures(2, shadowMaps);
+    glDeleteTextures(NUM_SHADOW_MAPS, shadowMaps);
     glDeleteFramebuffers(1, &shadowFBO);
     glDeleteTextures(1, &randomTexture);
     glDeleteBuffers(1, &shadowUBO);

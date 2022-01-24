@@ -33,10 +33,10 @@ Model::~Model() {
 
 void Model::Draw(const Shader &shader, unsigned int numInstances,
                  glm::mat4 *models, glm::mat3 *normMats) const {
-  if (cubeMapID != 0) {
+  if (cubeTex.id != -1) {
     glActiveTexture(GL_TEXTURE0);
     shader.setUnif(cubeMapLoc, 0);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubeTex.id);
   }
   for (unsigned int i = 0; i < meshes.size(); i++)
     meshes[i].Draw(shader, numInstances, models, normMats);
